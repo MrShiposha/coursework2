@@ -11,6 +11,11 @@ set(${CMAKE_PROJECT_NAME}_LIBRARIES
     tbb${cty_type_long}
 )
 
+set(TEST_LIBRARIES
+    gtest${crt_type}
+    gmock${crt_type}
+)
+
 if(${SYSTEM} STREQUAL "darwin")
     set(${CMAKE_PROJECT_NAME}_FRAMEWORKS
         Cocoa
