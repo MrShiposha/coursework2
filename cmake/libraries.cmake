@@ -1,8 +1,14 @@
 include(${CMAKE_CURRENT_LIST_DIR}/system.cmake)
 
+if(${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+    set(crt_type d)
+    set(cty_type_long _debug)
+endif()
+
 set(${CMAKE_PROJECT_NAME}_LIBRARIES
     glm_static
     assimp
+    tbb${cty_type_long}
 )
 
 if(${SYSTEM} STREQUAL "darwin")
