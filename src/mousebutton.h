@@ -1,0 +1,10 @@
+#ifndef CG_SEM5_COURSEWORK_MOUSEBUTTON_H
+#define CG_SEM5_COURSEWORK_MOUSEBUTTON_H
+
+enum class MouseButton
+{
+    LEFT, 
+    RIGHT
+};
+
+#endif // CG_SEM5_COURSEWORK_MOUSEBUTTON_H

@@ -1,0 +1,6 @@
+#ifndef COURSEWORK_INITIALIZE_H
+#define COURSEWORK_INITIALIZE_H
+
+void initialize();
+
+#endif // COURSEWORK_INITIALIZE_H

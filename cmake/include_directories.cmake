@@ -1,0 +1,4 @@
+set(${CMAKE_PROJECT_NAME}_INCLUDE_DIRECTORIES
+    ${CMAKE_SOURCE_DIR}/lib/include
+    $ENV{VULKAN_SDK}/include
+)
