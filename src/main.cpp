@@ -5,11 +5,13 @@
 #include "window.h"
 #include "messagebox.h"
 
+#include "renderer.h"
+
 int main() try
 {
     initialize();
-
     Window window;
+    Renderer renderer("CG Coursework", window, VulkanValidationMode::ENABLED);
 
     window.show();
 

@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include <optional>
+#include <stdexcept>
 #include <vulkan/vulkan.h>
 
 #include "devicebuffer.h"
@@ -88,6 +89,10 @@ struct Device
     void end_command_buffer(VkCommandBuffer command_buffer);
 
     void flush_command_buffer(VkCommandBuffer command_buffer, VkQueue queue);
+
+    VkPipelineShaderStageCreateInfo load_shader(std::string_view path, VkShaderStageFlagBits stage);
+
+    VkFormat get_supported_depth_format();
 
     bool is_extension_supported(std::string_view extension) const;
 };

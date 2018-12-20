@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <fstream>
 
 #include "device.h"
 #include "vkassert.h"
@@ -423,6 +424,68 @@ void Device::flush_command_buffer(VkCommandBuffer command_buffer, VkQueue queue)
     vkDestroyFence(logical_device, fence, nullptr);
 }
 
+VkPipelineShaderStageCreateInfo Device::load_shader(std::string_view path, VkShaderStageFlagBits stage)
+{
+    using namespace std::string_literals;
+
+    VkPipelineShaderStageCreateInfo shader_stage = {};
+	shader_stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	shader_stage.stage = stage;
+    shader_stage.pName = "main";
+
+    std::ifstream in(path.data(), std::ios::binary | std::ios::in | std::ios::ate);
+    if(!in)
+        throw std::runtime_error("Can't load shader \""s + path.data() + "\"");
+
+    size_t size = in.tellg();
+    assert(size > 0 && "Empty shader file");
+    in.seekg(0, std::ios::beg);
+    
+    std::unique_ptr<char[]> shader_code(new char[size]);
+    
+    in.read(shader_code.get(), size);
+    in.close();
+
+    VkShaderModule shader_module;
+    VkShaderModuleCreateInfo module_create_info = {};
+    module_create_info.sType                    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    module_create_info.codeSize                 = size;
+    module_create_info.pCode                    = reinterpret_cast<uint32_t*>(shader_code.get());
+
+    vk_assert
+    (
+        vkCreateShaderModule(logical_device, &module_create_info, nullptr, &shader_module),
+        "Can't create shader module"
+    );
+
+    shader_stage.module = shader_module;
+
+    assert(shader_stage.module != VK_NULL_HANDLE);
+    return shader_stage;
+}
+
+VkFormat Device::get_supported_depth_format()
+{
+    std::vector<VkFormat> depth_formats = 
+    {
+        VK_FORMAT_D32_SFLOAT_S8_UINT,
+        VK_FORMAT_D32_SFLOAT,
+        VK_FORMAT_D24_UNORM_S8_UINT,
+        VK_FORMAT_D16_UNORM_S8_UINT,
+        VK_FORMAT_D16_UNORM
+    };
+
+    for(auto &&format : depth_formats)
+    {
+        VkFormatProperties format_properties;
+        vkGetPhysicalDeviceFormatProperties(physical_device, format, &format_properties);
+
+        if(format_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT)
+            return format;
+    }
+
+    throw std::runtime_error("No depth format");
+}
 
 bool Device::is_extension_supported(std::string_view extension) const
 {
