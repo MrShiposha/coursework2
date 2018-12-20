@@ -45,6 +45,8 @@ MACRO(add_macos_bundle project_name)
     LINK_MACOS_FRAMEWORKS(${project_name} ${project_name}_FRAMEWORKS ${project_name}_FRAMEWORKS_DIRECTORIES)
     TARGET_LINK_LIBRARIES(${project_name} ${${project_name}_LIBRARIES})
 
+    file(REMOVE_RECURSE ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_BUILD_TYPE}/${target}.app)
+
     ADD_CUSTOM_COMMAND(
         TARGET ${project_name}
         POST_BUILD COMMAND
