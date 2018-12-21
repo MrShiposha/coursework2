@@ -5,6 +5,7 @@
 void load_materials
 (
     const aiScene *,
+    std::string_view path,
     std::shared_ptr<Device> device,
     VkCommandPool command_pool,
     VkQueue copy_queue,
@@ -44,7 +45,7 @@ std::shared_ptr<StaticMesh> StaticMesh::load_from_file
     if(scene == nullptr)
         throw std::runtime_error("Can't load mesh from file \""s + path.data() + "\"");
 
-    load_materials(scene, device, command_pool, copy_queue, materials);
+    load_materials(scene, path, device, command_pool, copy_queue, materials);
     load_parts(scene, materials, parts, vertices, indices);
 
     return std::shared_ptr<StaticMesh>
@@ -129,17 +130,18 @@ const std::vector<StaticMesh::Material> &StaticMesh::get_materials() const
 void load_materials
 (
     const aiScene *scene,
+    std::string_view path,
     std::shared_ptr<Device> device,
     VkCommandPool command_pool,
     VkQueue copy_queue,
     std::vector<StaticMesh::Material> &materials
 )
 {
+    std::vector<decltype(materials.begin())> to_erase;
+
     materials.resize(scene->mNumMaterials);
     for(size_t i = 0; i < materials.size(); ++i)
     {
-        materials[i] = { 0 };
-
         aiString material_name;
         scene->mMaterials[i]->Get(AI_MATKEY_NAME, material_name);
         materials[i].name = material_name.C_Str();
@@ -171,23 +173,33 @@ void load_materials
             texture_format = VK_FORMAT_ASTC_8x8_UNORM_BLOCK;
             texture_format_suffix = "_astc_8x8_unorm";
         }
-        else if(device->features.textureCompressionETC2)
-        {
-            texture_format = VK_FORMAT_ETC2_R8G8B8_UNORM_BLOCK;
-            texture_format_suffix = "_etc2_unorm";
-        }
+        // else if(device->features.textureCompressionETC2)
+        // {
+        //     texture_format = VK_FORMAT_ETC2_R8G8B8_UNORM_BLOCK;
+        //     texture_format_suffix = "_etc2_unorm";
+        // }
         else
             throw std::runtime_error("Device does not support any compressed texture format");
 
         if(scene->mMaterials[i]->GetTextureCount(aiTextureType_DIFFUSE) < 1)
-            throw std::runtime_error("Textures not found");
+        {
+            to_erase.push_back(materials.begin() + i);
+            continue;
+        }
+            // throw std::runtime_error("Textures not found");
 
         aiString texture_file;
         scene->mMaterials[i]->GetTexture(aiTextureType_DIFFUSE, 0, &texture_file);
-        std::string compressed_texture_file = texture_file.C_Str();
+        
+        std::string directory = path.data();
+        directory = directory.substr(0, path.find_last_of('/'));
+        std::string compressed_texture_file = directory + '/' + texture_file.C_Str();
         compressed_texture_file.insert(compressed_texture_file.find(".ktx"), texture_format_suffix); // !!!
         materials[i].diffuse = Texture2D::load_from_file(compressed_texture_file, texture_format, device, command_pool, copy_queue);
     }
+
+    for(auto &&it : to_erase)
+        materials.erase(it);
 }
 
 void load_parts

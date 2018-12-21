@@ -7,8 +7,9 @@
 
 #include "renderer.h"
 #include "camera.h"
+#include "staticmesh.h"
 
-void setup_scene(SceneGraph &);
+void setup_scene(Renderer &renderer, SceneGraph &);
 
 int main() try
 {
@@ -31,7 +32,7 @@ int main() try
 
     scenegraph.add_node(camera);
 
-    setup_scene(scenegraph);
+    setup_scene(renderer, scenegraph);
 
     renderer.prepare(scenegraph);
 
@@ -49,7 +50,16 @@ catch(const std::exception &e)
     return -1;
 }
 
-void setup_scene(SceneGraph &scene)
+void setup_scene(Renderer &renderer, SceneGraph &scene)
 {
+    auto mesh = StaticMesh::load_from_file
+    (
+        "cat", 
+        "resources/obj/cat/cat.obj", 
+        renderer.get_device(),
+        renderer.get_command_pool(),
+        renderer.get_queue()
+    );
 
+    scene.add_node(mesh);
 }

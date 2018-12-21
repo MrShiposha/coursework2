@@ -199,6 +199,8 @@ void Renderer::initialize_vulkan()
     device = std::make_shared<Device>(physical_devices[selected_device]);
 
     VkPhysicalDeviceFeatures enabled_features = {};
+    enabled_features.textureCompressionBC = true;
+
     vk_assert
     (
         device->initialize_logical_device(enabled_features, { VK_KHR_SWAPCHAIN_EXTENSION_NAME }),
@@ -523,6 +525,7 @@ void Renderer::prepare(SceneGraph &scenegraph)
     create_pipelines();
     fill_command_buffers();
 
+    is_prepared = true;
 }
 
 void Renderer::prepare_frame()
@@ -838,16 +841,18 @@ void Renderer::fill_command_buffers()
         {
             auto &materials = mesh->get_materials();
             auto &parts = mesh->get_parts();
-            for(size_t i = 0, materials_count = materials.size(); i < materials_count; ++i)
+            for(size_t j = 0, materials_count = materials.size(); j < materials_count; ++j)
             {
-                descriptor_sets[1] = materials[i].descriptor_set;
+                descriptor_sets[1] = materials[j].descriptor_set;
 
                 vkCmdBindPipeline(draw_command_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.static_mesh);
-                vkCmdBindDescriptorSets(draw_command_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layouts.static_mesh, 0, static_cast<uint32_t>(descriptor_sets.size()), descriptor_sets.data(), 0, nullptr);
 
-                vkCmdPushConstants(draw_command_buffers[i], pipeline_layouts.static_mesh, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(StaticMesh::MaterialProperties), &materials[i].properties);
+                uint32_t dynamic_offset = j * static_cast<uint32_t>(dynamic_uniform_alignment);
+                vkCmdBindDescriptorSets(draw_command_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layouts.static_mesh, 0, static_cast<uint32_t>(descriptor_sets.size()), descriptor_sets.data(), 1, &dynamic_offset);
 
-                vkCmdDrawIndexed(draw_command_buffers[i], parts[i].index_count, 1, 0, parts[i].index_base, 0);
+                vkCmdPushConstants(draw_command_buffers[i], pipeline_layouts.static_mesh, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(StaticMesh::MaterialProperties), &materials[j].properties);
+
+                vkCmdDrawIndexed(draw_command_buffers[i], parts[j].index_count, 1, 0, parts[j].index_base, 0);
             }
         }
         /////////////////////

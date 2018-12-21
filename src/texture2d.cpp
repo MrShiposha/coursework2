@@ -176,7 +176,7 @@ std::shared_ptr<Texture2D> Texture2D::load_from_file
     {
         VkBufferImageCopy buffer_copy_region               = {};
         buffer_copy_region.imageSubresource.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
-        buffer_copy_region.imageSubresource.mipLevel     = i;
+        buffer_copy_region.imageSubresource.mipLevel       = i;
         buffer_copy_region.imageSubresource.baseArrayLayer = 0;
         buffer_copy_region.imageSubresource.layerCount     = 1;
         buffer_copy_region.imageExtent.width               = static_cast<uint32_t>(texture2d[i].extent().x);
@@ -193,6 +193,7 @@ std::shared_ptr<Texture2D> Texture2D::load_from_file
     // Create optimal tiled target image
     VkImageCreateInfo image_create_info = {};
     image_create_info.sType             = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    image_create_info.imageType         = VK_IMAGE_TYPE_2D;
     image_create_info.format            = format;
     image_create_info.mipLevels         = texture->mip_levels;
     image_create_info.arrayLayers       = 1;
