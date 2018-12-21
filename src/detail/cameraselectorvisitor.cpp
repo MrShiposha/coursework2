@@ -10,7 +10,7 @@ void CameraSelectorVisitor::visit_up(std::shared_ptr<SceneNode>)
 void CameraSelectorVisitor::visit_down(std::shared_ptr<SceneNode> node)
 {
     if(auto camera = std::dynamic_pointer_cast<Camera>(node))
-        cameras.push_back(node);
+        cameras.push_back(camera);
 }
 
 void CameraSelectorVisitor::reset_current_camera()
