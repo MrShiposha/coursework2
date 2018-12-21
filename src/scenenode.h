@@ -13,8 +13,8 @@ public:
     SceneNode(std::string_view id);
     virtual ~SceneNode();
 
-    void accept_up(SceneGraphVisitor &);
-    void accept_down(SceneGraphVisitor &);
+    virtual void accept_up(SceneGraphVisitor &);
+    virtual void accept_down(SceneGraphVisitor &);
 
     const std::string &get_id() const;
     void set_id(std::string_view id);

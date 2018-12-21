@@ -111,6 +111,11 @@ const std::vector<StaticMesh::Part> &StaticMesh::get_parts() const
     return parts;
 }
 
+const std::vector<StaticMesh::Material> &StaticMesh::get_materials() const
+{
+    return materials;
+}
+
 void load_materials
 (
     const aiScene *scene,

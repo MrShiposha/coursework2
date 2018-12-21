@@ -2,6 +2,8 @@
 #define CG_SEM5_RENDERER_H
 
 #include <memory>
+#include <array>
+
 #include <vulkan/vulkan.h>
 #include <glm/glm.hpp>
 
@@ -9,6 +11,8 @@
 #include "device.h"
 #include "devicebuffer.h"
 #include "swapchain.h"
+
+#include "scenegraph.h"
 
 enum class VulkanValidationMode
 {
@@ -28,9 +32,12 @@ public:
 
     ~Renderer();
 
+    const VkClearColorValue clear_color = { { 0.025f, 0.025f, 0.025f, 1.f } };
+
     virtual void render() override;
     virtual void on_window_resize() override;
 
+    void initialize();
     void initialize_vulkan();
     void create_instance();
     void create_command_pool();
@@ -41,16 +48,31 @@ public:
     void setup_swapchain();
     void initialize_swapchain();
     void create_pipeline_cache();
-    void prepare();
+    void prepare(SceneGraph &);
     void prepare_frame();
     void submit_frame();
 
     void setup_debugging(VkDebugReportFlagsEXT flags);
     void free_debugging();
 
+    void create_static_mesh_vertex_descriptions();
+    void create_pipelines();
+    void fill_command_buffers();
+
+    void setup_descriptor_pool(uint32_t samplers_count);
+    void setup_scene_descriptor_set_layout();
+    void setup_materials_descriptor_set_layout();
+
+    void setup_static_mesh_pipeline_layout();
+    void setup_static_mesh_descriptors();
+
     void view_changed();
 
     void destroy_command_buffers();
+
+    std::shared_ptr<Device> get_device() const;
+    VkCommandPool get_command_pool() const;
+    VkQueue get_queue() const;
 
 private:
     void draw();
@@ -145,6 +167,8 @@ private:
         glm::mat4 *models = nullptr;
     } dynamic_uniform_data;
 
+    static constexpr uint32_t STATIC_MESH_BUFFER_ID = 0;
+
     struct 
     {
         struct 
@@ -155,13 +179,17 @@ private:
         } static_mesh;
     } vertex_info;
 
+    std::array<VkPipelineShaderStageCreateInfo, 2> shader_stages;
+
+    struct
+    {
+        VkPipelineLayout static_mesh;
+    } pipeline_layouts;
+
     struct 
     {
         VkPipeline static_mesh;
     } pipelines;
-
-    VkPipelineLayout pipeline_layout;
-
 };
 
 #endif // CG_SEM5_RENDERER_H

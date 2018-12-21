@@ -16,6 +16,8 @@ endif()
 file(GLOB ${CMAKE_PROJECT_NAME}_SOURCES
     ${CMAKE_SOURCE_DIR}/src/*.h
     ${CMAKE_SOURCE_DIR}/src/*.cpp
+    ${CMAKE_SOURCE_DIR}/src/detail/*.h
+    ${CMAKE_SOURCE_DIR}/src/detail/*.cpp
     ${${CMAKE_PROJECT_NAME}_${SYSTEM}_SOURCES}
 )
 

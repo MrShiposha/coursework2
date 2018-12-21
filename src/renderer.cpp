@@ -1,10 +1,12 @@
 #include <fstream>
 #include <sstream>
-#include <array>
 #include <chrono>
 
 #include "renderer.h"
 #include "vkassert.h"
+#include "staticmesh.h"
+
+#include "detail/materialcountervisitor.h"
 
 VKAPI_ATTR VkBool32 VKAPI_CALL message_callback
 (
@@ -30,6 +32,7 @@ frame_timer(0.0), fps_timer(0.0), last_fps(0.0),
 current_buffer(0)
 {
     initialize_vulkan();
+    initialize();
 }
 
 Renderer::~Renderer()
@@ -48,6 +51,9 @@ Renderer::~Renderer()
         vkDestroyFramebuffer(*device, framebuffers[i], nullptr);
 
     // TODO: Destroy shader modules
+    for(auto &&shader_stage : shader_stages)
+        if(shader_stage.module != VK_NULL_HANDLE)
+            vkDestroyShaderModule(*device, shader_stage.module, nullptr),   
 
     vkDestroyImageView(*device, depth_stencil.view, nullptr);
 	vkDestroyImage(*device, depth_stencil.image, nullptr);
@@ -76,7 +82,7 @@ void Renderer::render()
         view_changed();
     }
 
-    render();
+    draw();
     ++frame_counter;
 
     auto time_end = high_resolution_clock::now();
@@ -104,7 +110,20 @@ void Renderer::render()
 
 void Renderer::draw()
 {
+    if(is_prepared)
+    {
+        prepare_frame();
+        submit_info.commandBufferCount = 1;
+        submit_info.pCommandBuffers    = &draw_command_buffers[current_buffer];
 
+        vk_assert
+        (
+            vkQueueSubmit(queue, 1, &submit_info, VK_NULL_HANDLE),
+            "Can't submit frame"
+        );
+
+        submit_frame();
+    }
 }
 
 void Renderer::on_window_resize()
@@ -114,6 +133,18 @@ void Renderer::on_window_resize()
         // TODO: Camera transforms
         is_view_updated = true;
     }
+}
+
+void Renderer::initialize()
+{
+    initialize_swapchain();
+    create_command_pool();
+    setup_swapchain();
+    create_command_buffers();
+    create_depth_stencil();
+    setup_renderpass();
+    create_pipeline_cache();
+    setup_framebuffer();
 }
 
 void Renderer::initialize_vulkan()
@@ -438,16 +469,26 @@ void Renderer::create_pipeline_cache()
     );
 }
 
-void Renderer::prepare()
+void Renderer::prepare(SceneGraph &scenegraph)
 {
-    initialize_swapchain();
-    create_command_pool();
-    setup_swapchain();
-    create_command_buffers();
-    create_depth_stencil();
-    setup_renderpass();
-    create_pipeline_cache();
-    setup_framebuffer();
+    create_static_mesh_vertex_descriptions();
+
+    {
+        MaterialCounterVisitor counter;
+        scenegraph.accept_down(counter);
+
+        setup_descriptor_pool(counter.get_materials_count());
+    }
+
+    {
+        setup_scene_descriptor_set_layout();
+        setup_materials_descriptor_set_layout();
+        setup_static_mesh_pipeline_layout();
+    }
+
+    create_pipelines();
+    fill_command_buffers();
+
 }
 
 void Renderer::prepare_frame()
@@ -559,6 +600,301 @@ void Renderer::free_debugging()
     }
 }
 
+void Renderer::create_static_mesh_vertex_descriptions()
+{
+
+    vertex_info.static_mesh.binding_descriptions.resize(1);
+
+    VkVertexInputBindingDescription input_binding_description = {};
+    input_binding_description.binding   = STATIC_MESH_BUFFER_ID;
+    input_binding_description.stride    = sizeof(StaticMesh::Vertex);
+    input_binding_description.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+    vertex_info.static_mesh.binding_descriptions[0] = input_binding_description;
+
+    VkVertexInputAttributeDescription attribute_description = {};
+    vertex_info.static_mesh.attribute_descriptions.resize(4);
+
+    // Position (loc = 0)
+    attribute_description.location = 0;
+    attribute_description.binding  = STATIC_MESH_BUFFER_ID;
+    attribute_description.format   = VK_FORMAT_R32G32B32_SFLOAT;
+    attribute_description.offset   = 0;
+    vertex_info.static_mesh.attribute_descriptions[0] = attribute_description;
+
+    // Normal (loc = 1)
+    attribute_description.location = 1;
+    attribute_description.binding  = STATIC_MESH_BUFFER_ID;
+    attribute_description.format   = VK_FORMAT_R32G32B32_SFLOAT;
+    attribute_description.offset   = sizeof(float) * 3;
+    vertex_info.static_mesh.attribute_descriptions[1] = attribute_description;
+
+    // UV (loc = 2)
+    attribute_description.location = 2;
+    attribute_description.binding  = STATIC_MESH_BUFFER_ID;
+    attribute_description.format   = VK_FORMAT_R32G32_SFLOAT;
+    attribute_description.offset   = sizeof(float) * 6;
+    vertex_info.static_mesh.attribute_descriptions[2] = attribute_description;
+
+    // Color (loc = 3)
+    attribute_description.location = 3;
+    attribute_description.binding  = STATIC_MESH_BUFFER_ID;
+    attribute_description.format   = VK_FORMAT_R32G32B32_SFLOAT;
+    attribute_description.offset   = sizeof(float) * 8;
+    vertex_info.static_mesh.attribute_descriptions[3] = attribute_description;
+
+    vertex_info.static_mesh.input_state = {};
+    vertex_info.static_mesh.input_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertex_info.static_mesh.input_state.vertexBindingDescriptionCount   = static_cast<uint32_t>(vertex_info.static_mesh.binding_descriptions.size());
+    vertex_info.static_mesh.input_state.pVertexBindingDescriptions      = vertex_info.static_mesh.binding_descriptions.data();
+    vertex_info.static_mesh.input_state.vertexAttributeDescriptionCount = static_cast<uint32_t>(vertex_info.static_mesh.attribute_descriptions.size());
+    vertex_info.static_mesh.input_state.pVertexAttributeDescriptions    = vertex_info.static_mesh.attribute_descriptions.data();
+}
+
+void Renderer::create_pipelines()
+{
+    // Static mesh
+    VkPipelineInputAssemblyStateCreateInfo assembly_create_info = {};
+    assembly_create_info.sType                  = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    assembly_create_info.topology               = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    assembly_create_info.flags                  = 0;
+    assembly_create_info.primitiveRestartEnable = VK_FALSE;
+
+    VkPipelineRasterizationStateCreateInfo rasterization_create_info = {};
+    rasterization_create_info.sType            = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    rasterization_create_info.polygonMode      = VK_POLYGON_MODE_FILL;
+    rasterization_create_info.cullMode         = VK_CULL_MODE_NONE; // !
+    rasterization_create_info.frontFace        = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    rasterization_create_info.flags            = 0;
+    rasterization_create_info.depthClampEnable = VK_FALSE;
+    rasterization_create_info.lineWidth        = 1.f;
+
+    VkPipelineColorBlendAttachmentState blend_attachment_state = {};
+    blend_attachment_state.colorWriteMask = 0xF;
+    blend_attachment_state.blendEnable    = VK_FALSE;
+
+    VkPipelineColorBlendStateCreateInfo color_blend_state_create_info = {};
+    color_blend_state_create_info.sType           = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    color_blend_state_create_info.attachmentCount = 1;
+    color_blend_state_create_info.pAttachments    = &blend_attachment_state;
+
+    VkPipelineDepthStencilStateCreateInfo depth_stencil_create_info = {};
+    depth_stencil_create_info.sType            = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    depth_stencil_create_info.depthTestEnable  = VK_TRUE;
+    depth_stencil_create_info.depthWriteEnable = VK_TRUE;
+    depth_stencil_create_info.depthCompareOp   = VK_COMPARE_OP_LESS_OR_EQUAL;
+    depth_stencil_create_info.front            = depth_stencil_create_info.back;
+    depth_stencil_create_info.back.compareOp   = VK_COMPARE_OP_ALWAYS;
+
+    VkPipelineViewportStateCreateInfo viewport_state_create_info = {};
+    viewport_state_create_info.sType         = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewport_state_create_info.viewportCount = 1;
+    viewport_state_create_info.scissorCount  = 1;
+    viewport_state_create_info.flags         = 0;
+
+    VkPipelineMultisampleStateCreateInfo multisample_create_info = {};
+    multisample_create_info.sType                = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    multisample_create_info.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+    multisample_create_info.flags                = 0;
+
+    std::vector<VkDynamicState> dynamic_state_enables = 
+    {
+        VK_DYNAMIC_STATE_VIEWPORT,
+        VK_DYNAMIC_STATE_SCISSOR
+    };
+
+    VkPipelineDynamicStateCreateInfo dynamic_state_create_info = {};
+    dynamic_state_create_info.sType             = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamic_state_create_info.dynamicStateCount = static_cast<uint32_t>(dynamic_state_enables.size());
+    dynamic_state_create_info.pDynamicStates    = dynamic_state_enables.data();
+    dynamic_state_create_info.flags             = 0;
+
+    shader_stages[0] = device->load_shader("resources/shaders/static_mesh.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
+    shader_stages[1] = device->load_shader("resources/shaders/static_mesh.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
+
+    VkGraphicsPipelineCreateInfo pipeline_create_info = {};
+    pipeline_create_info.sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pipeline_create_info.layout              = pipeline_layouts.static_mesh;
+    pipeline_create_info.renderPass          = renderpass;
+    pipeline_create_info.flags               = 0;
+    pipeline_create_info.basePipelineIndex   = -1;
+    pipeline_create_info.basePipelineHandle  = VK_NULL_HANDLE;
+    pipeline_create_info.pVertexInputState   = &vertex_info.static_mesh.input_state;
+    pipeline_create_info.pInputAssemblyState = &assembly_create_info;
+    pipeline_create_info.pRasterizationState = &rasterization_create_info;
+    pipeline_create_info.pColorBlendState    = &color_blend_state_create_info;
+    pipeline_create_info.pMultisampleState   = &multisample_create_info;
+    pipeline_create_info.pViewportState      = &viewport_state_create_info;
+    pipeline_create_info.pDepthStencilState  = &depth_stencil_create_info;
+    pipeline_create_info.pDynamicState       = &dynamic_state_create_info;
+    pipeline_create_info.stageCount          = static_cast<uint32_t>(shader_stages.size());
+    pipeline_create_info.pStages             = shader_stages.data();
+
+    // Enabled Alpha blending
+    blend_attachment_state.blendEnable         = VK_TRUE;
+    blend_attachment_state.colorBlendOp        = VK_BLEND_OP_ADD;
+    blend_attachment_state.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_COLOR;
+    blend_attachment_state.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA; // ! _COLOR
+
+    vk_assert
+    (
+        vkCreateGraphicsPipelines(*device, pipeline_cache, 1, &pipeline_create_info, nullptr, &pipelines.static_mesh),
+        "Can't create graphics pipeline for static meshes"
+    );
+}
+
+void Renderer::fill_command_buffers()
+{
+    VkCommandBufferBeginInfo buffer_begin_info = {};
+    buffer_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+
+    VkClearValue clear_values[2];
+    clear_values[0].color        = clear_color;
+    clear_values[1].depthStencil = { 1.f, 0 };
+
+    VkRenderPassBeginInfo renderpass_begin_info    = {};
+    renderpass_begin_info.sType                    = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    renderpass_begin_info.renderPass               = renderpass;
+    renderpass_begin_info.renderArea.offset.x      = 0;
+    renderpass_begin_info.renderArea.offset.y      = 0;
+    renderpass_begin_info.renderArea.extent.width  = width;
+    renderpass_begin_info.renderArea.extent.height = height;
+    renderpass_begin_info.clearValueCount          = 2;
+    renderpass_begin_info.pClearValues             = clear_values;
+
+    for(uint32_t i = 0; i < draw_command_buffers.size(); ++i)
+    {
+        renderpass_begin_info.framebuffer = framebuffers[i];
+
+        vk_assert
+        (
+            vkBeginCommandBuffer(draw_command_buffers[i], &buffer_begin_info),
+            "Can't begin draw buffer"
+        );
+
+        vkCmdBeginRenderPass(draw_command_buffers[i], &renderpass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
+
+        VkViewport viewport = {};
+        viewport.width      = width;
+        viewport.height     = height;
+        viewport.minDepth   = 0.f;
+        viewport.maxDepth   = 1.f;
+        vkCmdSetViewport(draw_command_buffers[i], 0, 1, &viewport);
+
+        VkRect2D scissor = {};
+        scissor.extent.width    = width;
+        scissor.extent.height   = height;
+        scissor.offset.x        = 0;
+        scissor.offset.y        = 0;
+        vkCmdSetScissor(draw_command_buffers[i], 0, 1, &scissor);
+
+        // TODO: Actual rendering
+
+        vkCmdEndRenderPass(draw_command_buffers[i]);
+
+        vk_assert
+        (
+            vkEndCommandBuffer(draw_command_buffers[i]),
+            "Can't finish draw command buffer"
+        );
+    }
+}
+
+void Renderer::setup_static_mesh_pipeline_layout()
+{
+    std::array<VkDescriptorSetLayout, 2> layouts = 
+    {
+        descriptor_set_layouts.scene,
+        descriptor_set_layouts.static_mesh_material
+    };
+
+    // Use push constants to pass material properties to the fragment shader
+    VkPushConstantRange push_constant_range = {};
+    push_constant_range.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    push_constant_range.size       = sizeof(StaticMesh::MaterialProperties);
+    push_constant_range.offset     = 0;
+
+    VkPipelineLayoutCreateInfo layout_create_info = {};
+    layout_create_info.sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    layout_create_info.setLayoutCount         = static_cast<uint32_t>(layouts.size());
+    layout_create_info.pSetLayouts            = layouts.data();
+    layout_create_info.pushConstantRangeCount = 1;
+    layout_create_info.pPushConstantRanges    = &push_constant_range;
+
+    vk_assert
+    (
+        vkCreatePipelineLayout(*device, &layout_create_info, nullptr, &pipeline_layouts.static_mesh),
+        "Can't create pipeline layout for static mesh"
+    );
+}
+
+void Renderer::setup_static_mesh_descriptors()
+{
+
+}
+
+void Renderer::setup_descriptor_pool(uint32_t samplers_count)
+{
+    std::vector<VkDescriptorPoolSize> pool_sizes = 
+    {
+        VkDescriptorPoolSize { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         1 },
+        VkDescriptorPoolSize { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1 }
+    };
+
+    if(samplers_count > 0)
+        pool_sizes.push_back(VkDescriptorPoolSize { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, samplers_count });
+
+    VkDescriptorPoolCreateInfo pool_create_info = {};
+    pool_create_info.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    pool_create_info.poolSizeCount = static_cast<uint32_t>(pool_sizes.size());
+    pool_create_info.pPoolSizes    = pool_sizes.data();
+    pool_create_info.maxSets       = samplers_count + 1; // + 1 for uniforms (static and dynamic on one DescriptorSet)
+
+    vk_assert
+    (
+        vkCreateDescriptorPool(*device, &pool_create_info, nullptr, &descriptor_pool),
+        "Can't create descriptor pool"
+    );
+}
+
+void Renderer::setup_scene_descriptor_set_layout()
+{
+    std::vector<VkDescriptorSetLayoutBinding> layout_bindings = 
+    {
+        VkDescriptorSetLayoutBinding { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr },
+        VkDescriptorSetLayoutBinding { 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr }
+    };
+
+    VkDescriptorSetLayoutCreateInfo descriptor_layout_create_info = {};
+    descriptor_layout_create_info.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    descriptor_layout_create_info.bindingCount = static_cast<uint32_t>(layout_bindings.size());
+    descriptor_layout_create_info.pBindings    = layout_bindings.data();
+
+    vk_assert
+    (
+        vkCreateDescriptorSetLayout(*device, &descriptor_layout_create_info, nullptr, &descriptor_set_layouts.scene),
+        "Can't create descriptor set layout for scene"
+    );
+}
+
+void Renderer::setup_materials_descriptor_set_layout()
+{
+    std::vector<VkDescriptorSetLayoutBinding> layout_bindings = 
+    {
+        VkDescriptorSetLayoutBinding { 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr }
+    };
+
+    VkDescriptorSetLayoutCreateInfo descriptor_layout_create_info = {};
+    descriptor_layout_create_info.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    descriptor_layout_create_info.bindingCount = static_cast<uint32_t>(layout_bindings.size());
+    descriptor_layout_create_info.pBindings    = layout_bindings.data();
+
+    vk_assert
+    (
+        vkCreateDescriptorSetLayout(*device, &descriptor_layout_create_info, nullptr, &descriptor_set_layouts.static_mesh_material),
+        "Can't create descriptor set layout for static mesh materials"
+    );
+}
+
 void Renderer::view_changed()
 {
     // TODO:
@@ -567,4 +903,19 @@ void Renderer::view_changed()
 void Renderer::destroy_command_buffers()
 {
     vkFreeCommandBuffers(*device, command_pool, static_cast<uint32_t>(draw_command_buffers.size()), draw_command_buffers.data());
+}
+
+std::shared_ptr<Device> Renderer::get_device() const
+{
+    return device;
+}
+
+VkCommandPool Renderer::get_command_pool() const
+{
+    return command_pool;
+}
+
+VkQueue Renderer::get_queue() const
+{
+    return queue;
 }

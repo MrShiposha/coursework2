@@ -79,6 +79,7 @@ public:
     virtual const void *get_raw_indices_data() const override;
 
     const std::vector<Part> &get_parts() const;
+    const std::vector<Material> &get_materials() const;
 
 private:
     StaticMesh
