@@ -5,6 +5,7 @@
     std::function<void(int32_t, int32_t)> mouse_moved_callback;
     std::function<void(MouseButton)>      mouse_down_callback;
     std::function<void(MouseButton)>      mouse_up_callback;
+    std::function<void(const Key &)>     key_callback;
 
     NSTrackingArea *tracking_area;
 }
@@ -17,6 +18,7 @@
     mouse_moved_callback = [](int32_t, int32_t) {};
     mouse_down_callback  = [](MouseButton) {};
     mouse_up_callback    = [](MouseButton) {};
+    key_callback         = [](const Key &) {};
 }
 
 -(void) set_resize_callback: (std::function<void()>)callback {
@@ -35,12 +37,33 @@
     mouse_up_callback = callback;
 }
 
+-(void) set_key_callback: (std::function<void(const Key &)>)callback {
+    key_callback = callback;
+}
+
 - (BOOL)acceptsFirstResponder {
    return YES;
 }
 
 - (BOOL)acceptsFirstMouse:(NSEvent *)theEvent {
     return YES;
+}
+
+-(void)keyDown:(NSEvent *)event {
+    if(event.type == NSEventTypeKeyDown) {
+        const char *chars = [event.charactersIgnoringModifiers UTF8String];
+        if(chars[0] != '\0')
+        {
+            Key key = {};
+            key.code = chars[0];
+
+            if(event.modifierFlags & NSEventModifierFlagCommand) {
+                key.modifiers = Key::Modifiers::COMMAND;
+            }
+
+            key_callback(key);
+        }
+    }
 }
 
 -(void)mouseDown:(NSEvent *)event {    
@@ -51,11 +74,11 @@
     mouse_up_callback(MouseButton::LEFT);
 }
 
-- (void) rightMouseDown: (NSEvent*)event {
+- (void)rightMouseDown: (NSEvent*)event {
     mouse_down_callback(MouseButton::RIGHT);
 }
 
-- (void) rightMouseUp: (NSEvent*)event {
+- (void)rightMouseUp: (NSEvent*)event {
     mouse_up_callback(MouseButton::RIGHT);
 }
 

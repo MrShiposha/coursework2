@@ -116,3 +116,8 @@ void Window::set_mouse_up_callback(std::function<void(MouseButton)> callback)
 {
     [static_cast<id>(handle) set_mouse_up_callback: callback];
 }
+
+void Window::set_key_callback(std::function<void(const Key &)> callback)
+{
+    [static_cast<id>(handle)set_key_callback: callback];
+}

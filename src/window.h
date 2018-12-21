@@ -5,6 +5,7 @@
 #include <string>
 
 #include "mousebutton.h"
+#include "key.h"
 
 class Window
 {
@@ -43,6 +44,8 @@ public:
     void set_mouse_down_callback(std::function<void(MouseButton)>);
 
     void set_mouse_up_callback(std::function<void(MouseButton)>);
+
+    void set_key_callback(std::function<void(const Key &)>);
 
 private:
     void *handle;

@@ -31,6 +31,8 @@ public:
 
     bool is_right_mouse_button_released() const;
 
+    virtual void on_key_pressed(const Key &);
+
 protected:
     Window &window;
     MouseButtons mouse_buttons;

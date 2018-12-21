@@ -22,6 +22,8 @@ AbstractRenderer::AbstractRenderer(Window &window)
         else
             mouse_buttons.right = false;
     });
+
+    window.set_key_callback([this](const Key &key) { on_key_pressed(key); });
 }
 
 AbstractRenderer::~AbstractRenderer()
@@ -52,3 +54,6 @@ bool AbstractRenderer::is_right_mouse_button_released() const
 {
     return !mouse_buttons.right;
 }
+
+void AbstractRenderer::on_key_pressed(const Key &key)
+{}
