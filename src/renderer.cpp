@@ -822,11 +822,35 @@ void Renderer::fill_command_buffers()
         vkCmdSetScissor(draw_command_buffers[i], 0, 1, &scissor);
 
         // Draw static meshes
+        /////////////////////
+        if(vertex_buffer->size != 0 && index_buffer->size != 0)
         {
-            // VkDeviceSize offsets[1] = { 0 };
-            // vkCmdBindVertexBuffers(draw_command_buffers[i], 0, 1, &vertex_buffer.buffer, offsets);
-            // vkCmdBindIndexBuffer(draw_command_buffers[i], index_buffer.biffer, 0, VK_INDEX_TYPE_UINT32);
+            VkDeviceSize offsets[1] = { 0 };
+            vkCmdBindVertexBuffers(draw_command_buffers[i], 0, 1, &vertex_buffer->buffer, offsets);
+            vkCmdBindIndexBuffer(draw_command_buffers[i], index_buffer->buffer, 0, VK_INDEX_TYPE_UINT32);
         }
+
+        std::array<VkDescriptorSet, 2> descriptor_sets;
+        descriptor_sets[0] = scene_descriptor_set;
+
+        auto &meshes = static_meshes.get_meshes();
+        for(auto &&mesh : meshes)
+        {
+            auto &materials = mesh->get_materials();
+            auto &parts = mesh->get_parts();
+            for(size_t i = 0, materials_count = materials.size(); i < materials_count; ++i)
+            {
+                descriptor_sets[1] = materials[i].descriptor_set;
+
+                vkCmdBindPipeline(draw_command_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.static_mesh);
+                vkCmdBindDescriptorSets(draw_command_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layouts.static_mesh, 0, static_cast<uint32_t>(descriptor_sets.size()), descriptor_sets.data(), 0, nullptr);
+
+                vkCmdPushConstants(draw_command_buffers[i], pipeline_layouts.static_mesh, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(StaticMesh::MaterialProperties), &materials[i].properties);
+
+                vkCmdDrawIndexed(draw_command_buffers[i], parts[i].index_count, 1, 0, parts[i].index_base, 0);
+            }
+        }
+        /////////////////////
 
         vkCmdEndRenderPass(draw_command_buffers[i]);
 
