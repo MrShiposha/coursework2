@@ -22,7 +22,7 @@ public:
 
 private:
     size_t current_camera;
-    std::vector<Camera*> cameras;
+    std::vector<std::shared_ptr<Camera>> cameras;
 };
 
 #endif // CG_SEM5_CAMERASELECTORVISITOR_H
