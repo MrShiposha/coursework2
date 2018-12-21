@@ -14,6 +14,7 @@
 
 #include "scenegraph.h"
 #include "detail/actorscontainer.h"
+#include "detail/staticmeshescontainer.h"
 #include "detail/cameraselector.h"
 #include "detail/meshselector.h"
 
@@ -62,7 +63,7 @@ public:
     void create_pipelines();
     void fill_command_buffers();
 
-    void setup_descriptor_pool(uint32_t samplers_count);
+    void setup_descriptor_pool();
     void setup_scene_descriptor_set_layout();
     void setup_materials_descriptor_set_layout();
     void setup_static_mesh_pipeline_layout();
@@ -207,6 +208,7 @@ private:
     } pipelines;
 
     ActorsContainer actors_container;
+    StaticMeshesContainer static_meshes;
     CameraSelector camera_selector;
 };
 

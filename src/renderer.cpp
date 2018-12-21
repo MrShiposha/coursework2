@@ -7,9 +7,6 @@
 #include "vkassert.h"
 #include "staticmesh.h"
 
-#include "detail/materialcounter.h"
-#include "detail/actorscontainer.h"
-
 void *aligned_allocate(size_t size, size_t alignment)
 {
     void *memory = nullptr;
@@ -73,7 +70,6 @@ Renderer::~Renderer()
     for(uint32_t i = 0; i < framebuffers.size(); ++i)
         vkDestroyFramebuffer(*device, framebuffers[i], nullptr);
 
-    // TODO: Destroy shader modules
     for(auto &&shader_stage : shader_stages)
         if(shader_stage.module != VK_NULL_HANDLE)
             vkDestroyShaderModule(*device, shader_stage.module, nullptr),   
@@ -501,10 +497,8 @@ void Renderer::prepare(SceneGraph &scenegraph)
     create_static_mesh_vertex_descriptions();
 
     {
-        MaterialCounter counter;
-        scenegraph.accept_down(counter);
-
-        setup_descriptor_pool(counter.get_materials_count());
+        scenegraph.accept_down(static_meshes);
+        setup_descriptor_pool();
     }
 
     {
@@ -519,6 +513,10 @@ void Renderer::prepare(SceneGraph &scenegraph)
     
         setup_uniform_buffers();
         setup_scene_descriptors();
+    }
+
+    {
+        setup_materials_descriptors();
     }
 
     create_pipelines();
@@ -909,7 +907,39 @@ void Renderer::setup_scene_descriptors()
 
 void Renderer::setup_materials_descriptors()
 {
-    // TODO: Priority 2
+    auto &meshes = static_meshes.get_meshes();
+    for(auto &&mesh : meshes)
+    {
+        auto &materials = mesh->get_materials();
+        for(size_t i = 0, materials_count = materials.size(); i < materials_count; ++i)
+        {
+            VkDescriptorSetAllocateInfo allocate_info = {};
+            allocate_info.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+            allocate_info.descriptorPool     = descriptor_pool;
+            allocate_info.pSetLayouts        = &descriptor_set_layouts.static_mesh_material;
+            allocate_info.descriptorSetCount = 1;
+
+            vk_assert
+            (
+                vkAllocateDescriptorSets(*device, &allocate_info, const_cast<VkDescriptorSet*>(&materials[i].descriptor_set)),
+                "Can't allocate descriptor sets for materials"
+            );
+
+            VkWriteDescriptorSet write_descriptor = {};
+            write_descriptor.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            write_descriptor.dstSet          = const_cast<VkDescriptorSet&>(materials[i].descriptor_set);
+            write_descriptor.descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            write_descriptor.dstBinding      = 0;
+            write_descriptor.pImageInfo      = &materials[i].diffuse->descriptor;
+            write_descriptor.descriptorCount = 1;
+            std::vector<VkWriteDescriptorSet> write_descriptors = 
+            {
+                write_descriptor
+            };
+
+            vkUpdateDescriptorSets(*device, static_cast<uint32_t>(write_descriptors.size()), write_descriptors.data(), 0, nullptr);
+        }
+    }
 }
 
 void Renderer::setup_static_mesh_buffer()
@@ -997,7 +1027,7 @@ void Renderer::update_dynamic_uniform()
     vkFlushMappedMemoryRanges(*device, 1, &memory_range);
 }
 
-void Renderer::setup_descriptor_pool(uint32_t samplers_count)
+void Renderer::setup_descriptor_pool()
 {
     std::vector<VkDescriptorPoolSize> pool_sizes = 
     {
@@ -1005,6 +1035,7 @@ void Renderer::setup_descriptor_pool(uint32_t samplers_count)
         VkDescriptorPoolSize { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1 }
     };
 
+    uint32_t samplers_count = static_cast<uint32_t>(static_meshes.get_meshes().size());
     if(samplers_count > 0)
         pool_sizes.push_back(VkDescriptorPoolSize { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, samplers_count });
 
