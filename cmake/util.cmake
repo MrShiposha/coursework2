@@ -1,3 +1,5 @@
+include(cmake/system.cmake)
+
 MACRO(REQUIRE_CXX_17)
     SET(CMAKE_CXX_STANDARD 17)
 
@@ -61,13 +63,33 @@ MACRO(add_macos_bundle project_name)
         ${MACOS_BUNDLE_PLIST}
         LINKER_LANGUAGE CXX
     )
-ENDMACRO() 
+
+    add_custom_command(
+        TARGET ${project_name} PRE_BUILD
+        COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_BUILD_TYPE}
+        COMMENT "Erase old executable version"
+    )
+
+    set_executable_directory(${project_name})
+ENDMACRO()
+
+macro(set_executable_directory target)
+    if(${SYSTEM} STREQUAL "darwin")
+        set(${target}_EXECUTABLE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_BUILD_TYPE}/${target}.app/Contents/MacOS)
+    endif()
+endmacro()
 
 macro(compile_shaders target)
-    FOREACH(file ${SHADERS})
+    file(GLOB ${target}_SHADERS
+        "${CMAKE_SOURCE_DIR}/src/shaders/*.vert"
+        "${CMAKE_SOURCE_DIR}/src/shaders/*.frag"
+    )
+
+    FOREACH(file ${${target}_SHADERS})
+        get_filename_component(filename ${file} NAME)
         ADD_CUSTOM_COMMAND(
             TARGET ${target}
-            COMMAND $ENV{VULKAN_SDK}/bin/glslangValidator ARGS -V ${file} -o ${file}.spv
+            COMMAND $ENV{VULKAN_SDK}/bin/glslangValidator ARGS -V ${file} -o ${CMAKE_SOURCE_DIR}/resources/shaders/${filename}.spv
             COMMENT "Compiling shader ${file}"
         )
     ENDFOREACH()

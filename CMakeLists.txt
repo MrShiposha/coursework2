@@ -17,3 +17,6 @@ REQUIRE_CXX_17()
 if(${SYSTEM} STREQUAL "darwin")
     add_macos_bundle(${CMAKE_PROJECT_NAME})
 endif()
+
+compile_shaders(${CMAKE_PROJECT_NAME})
+copy_directory(${CMAKE_PROJECT_NAME} ${CMAKE_SOURCE_DIR}/resources ${${CMAKE_PROJECT_NAME}_EXECUTABLE_DIRECTORY}/resources)
