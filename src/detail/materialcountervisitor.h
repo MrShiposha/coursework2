@@ -13,8 +13,8 @@ public:
 
     uint32_t get_materials_count() const;
 
-    virtual void visit_up(SceneNode &) override;
-    virtual void visit_down(SceneNode &) override;
+    virtual void visit_up(std::shared_ptr<SceneNode>) override;
+    virtual void visit_down(std::shared_ptr<SceneNode>) override;
 
 private:
     uint32_t materials_count;

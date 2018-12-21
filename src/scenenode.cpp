@@ -16,12 +16,12 @@ SceneNode::~SceneNode()
 
 void SceneNode::accept_up(SceneGraphVisitor &visitor)
 {
-    visitor.visit_up(*this);
+    visitor.visit_up(shared_from_this());
 }
 
 void SceneNode::accept_down(SceneGraphVisitor &visitor)
 {
-    visitor.visit_down(*this);
+    visitor.visit_down(shared_from_this());
 }
 
 const std::string &SceneNode::get_id() const

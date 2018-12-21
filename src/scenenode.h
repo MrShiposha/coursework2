@@ -1,12 +1,13 @@
 #ifndef CG_SEM5_COURSEWORK_SCENENODE_H
 #define CG_SEM5_COURSEWORK_SCENENODE_H
 
+#include <memory>
 #include <string>
 #include <string_view>
 
 class SceneGraphVisitor;
 
-class SceneNode
+class SceneNode : public std::enable_shared_from_this<SceneNode>
 {
 public:
     SceneNode();
