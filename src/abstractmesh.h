@@ -5,7 +5,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
-#include "scenenode.h"
+#include "actor.h"
 
 using MeshElementIndex   = uint32_t;
 using VertexIndex        = MeshElementIndex;
@@ -14,7 +14,7 @@ using VertexNormalIndex  = MeshElementIndex;
 using FaceIndex          = MeshElementIndex;
 using Face               = std::vector<MeshElementIndex>;
 
-class AbstractMesh : public SceneNode
+class AbstractMesh : public Actor
 {
 public:
     AbstractMesh();
