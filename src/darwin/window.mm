@@ -14,7 +14,7 @@ Window::Window()
 (
     [[WindowDelegate alloc]
         initWithContentRect:NSMakeRect(0, 0, DEFAULT_WIDTH, DEFAULT_HEIGHT)
-        styleMask: NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable | NSWindowStyleMaskResizable
+        styleMask: NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable /*| NSWindowStyleMaskResizable */
         backing:NSBackingStoreBuffered
         defer:NO
     ]

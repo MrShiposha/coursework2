@@ -29,6 +29,7 @@ public:
     ~Renderer();
 
     virtual void render() override;
+    virtual void on_window_resize() override;
 
     void initialize_vulkan();
     void create_instance();
@@ -38,6 +39,7 @@ public:
     void setup_framebuffer();
     void setup_renderpass();
     void setup_swapchain();
+    void initialize_swapchain();
     void create_pipeline_cache();
     void prepare();
     void prepare_frame();
@@ -46,9 +48,13 @@ public:
     void setup_debugging(VkDebugReportFlagsEXT flags);
     void free_debugging();
 
+    void view_changed();
+
     void destroy_command_buffers();
 
 private:
+    void draw();
+
     ////////////////////////////////////////////
     //           Vulkan must have             //
     ////////////////////////////////////////////
@@ -61,7 +67,16 @@ private:
     VkInstance instance;
     std::shared_ptr<Device> device;
     VkQueue queue;
+    
     VkFormat depth_format;
+    struct
+    {
+        VkImage        image;
+        VkDeviceMemory memory;
+        VkImageView    view;
+    } depth_stencil;
+
+    uint32_t width, height;
 
     struct
     {
@@ -73,10 +88,31 @@ private:
     VkSubmitInfo submit_info;
 
     Swapchain swapchain;
+    std::vector<VkFramebuffer> framebuffers;
+
+    VkRenderPass renderpass;
+
+    VkPipelineCache pipeline_cache;
+
+    VkCommandPool command_pool;
+    std::vector<VkCommandBuffer> draw_command_buffers;
+    uint32_t current_buffer;
+
+    bool is_prepared;
 
     ////////////////////////////////////////////
     //           Project specific             //
     ////////////////////////////////////////////
+
+    bool is_view_updated;
+
+    double timer;
+    double timer_speed;
+
+    uint32_t frame_counter;
+    double   frame_timer;
+    double   fps_timer;
+    double   last_fps;
 
     VkDescriptorPool descriptor_pool;
 
@@ -125,7 +161,6 @@ private:
     } pipelines;
 
     VkPipelineLayout pipeline_layout;
-    VkCommandPool command_pool;
 
 };
 
