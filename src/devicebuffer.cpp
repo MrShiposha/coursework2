@@ -68,9 +68,15 @@ VkResult DeviceBuffer::make_host_visible(VkDeviceSize size, VkDeviceSize offset)
 
 void DeviceBuffer::destroy()
 {
-    if(buffer)
-        vkDestroyBuffer(device, buffer, nullptr);
-    
     if(memory)
+    {
         vkFreeMemory(device, memory, nullptr);
+        memory = VK_NULL_HANDLE;
+    }
+
+    if(buffer)
+    {
+        vkDestroyBuffer(device, buffer, nullptr);
+        buffer = VK_NULL_HANDLE;
+    }
 }

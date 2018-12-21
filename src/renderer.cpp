@@ -1,12 +1,28 @@
 #include <fstream>
 #include <sstream>
 #include <chrono>
+#include <cstdlib>
 
 #include "renderer.h"
 #include "vkassert.h"
 #include "staticmesh.h"
 
-#include "detail/materialcountervisitor.h"
+#include "detail/materialcounter.h"
+#include "detail/actorscontainer.h"
+
+void *aligned_allocate(size_t size, size_t alignment)
+{
+    void *memory = nullptr;
+#if defined(_MSC_VER)
+    memory = _aligned_malloc(size, alignment);
+#else
+    int result = posix_memalign(&memory, alignment, size);
+    if(result != 0)
+        memory = nullptr;
+#endif // Compiler
+
+    return memory;
+}
 
 VKAPI_ATTR VkBool32 VKAPI_CALL message_callback
 (
@@ -23,13 +39,20 @@ VKAPI_ATTR VkBool32 VKAPI_CALL message_callback
 Renderer::Renderer(std::string_view application_name, Window &window, VulkanValidationMode mode)
 : AbstractRenderer(window), application_name(application_name.data()), validation_mode(mode),
 width(window.get_view_size().width), height(window.get_view_size().height),
+current_buffer(0),
 is_prepared(false),
 is_view_updated(false),
 timer(0.0),
 timer_speed(0.25),
 frame_counter(0),
 frame_timer(0.0), fps_timer(0.0), last_fps(0.0),
-current_buffer(0)
+vertex_buffer(std::make_shared<DeviceBuffer>()),
+index_buffer(std::make_shared<DeviceBuffer>()),
+uniform_buffers
+({
+    std::make_shared<DeviceBuffer>(),
+    std::make_shared<DeviceBuffer>()
+})
 {
     initialize_vulkan();
     initialize();
@@ -66,6 +89,10 @@ Renderer::~Renderer()
 	vkDestroySemaphore(*device, semaphores.present_complete, nullptr);
 	vkDestroySemaphore(*device, semaphores.render_complete, nullptr);
 
+    vertex_buffer.reset();
+    index_buffer.reset();
+    uniform_buffers.static_uniform.reset();
+    uniform_buffers.dynamic_uniform.reset();
     device.reset();
 
     vkDestroyInstance(instance, nullptr);
@@ -474,7 +501,7 @@ void Renderer::prepare(SceneGraph &scenegraph)
     create_static_mesh_vertex_descriptions();
 
     {
-        MaterialCounterVisitor counter;
+        MaterialCounter counter;
         scenegraph.accept_down(counter);
 
         setup_descriptor_pool(counter.get_materials_count());
@@ -484,6 +511,14 @@ void Renderer::prepare(SceneGraph &scenegraph)
         setup_scene_descriptor_set_layout();
         setup_materials_descriptor_set_layout();
         setup_static_mesh_pipeline_layout();
+    }
+
+    {
+        scenegraph.accept_down(actors_container);
+        scenegraph.accept_down(camera_selector);
+    
+        setup_uniform_buffers();
+        setup_scene_descriptors();
     }
 
     create_pipelines();
@@ -787,7 +822,12 @@ void Renderer::fill_command_buffers()
         scissor.offset.y        = 0;
         vkCmdSetScissor(draw_command_buffers[i], 0, 1, &scissor);
 
-        // TODO: Actual rendering
+        // Draw static meshes
+        {
+            // VkDeviceSize offsets[1] = { 0 };
+            // vkCmdBindVertexBuffers(draw_command_buffers[i], 0, 1, &vertex_buffer.buffer, offsets);
+            // vkCmdBindIndexBuffer(draw_command_buffers[i], index_buffer.biffer, 0, VK_INDEX_TYPE_UINT32);
+        }
 
         vkCmdEndRenderPass(draw_command_buffers[i]);
 
@@ -827,9 +867,134 @@ void Renderer::setup_static_mesh_pipeline_layout()
     );
 }
 
-void Renderer::setup_static_mesh_descriptors()
+void Renderer::setup_scene_descriptors()
 {
+    VkDescriptorSetAllocateInfo allocate_info = {};
+    allocate_info.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    allocate_info.descriptorPool     = descriptor_pool;
+    allocate_info.descriptorSetCount = 1;
+    allocate_info.pSetLayouts        = &descriptor_set_layouts.scene;
 
+    vk_assert
+    (
+        vkAllocateDescriptorSets(*device, &allocate_info, &scene_descriptor_set),
+        "Can't allocate scene descriptor set"
+    );
+
+    VkWriteDescriptorSet projection_view_descriptor = {};
+    projection_view_descriptor.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    projection_view_descriptor.dstSet          = scene_descriptor_set;
+    projection_view_descriptor.descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    projection_view_descriptor.dstBinding      = 0;
+    projection_view_descriptor.pBufferInfo     = &uniform_buffers.static_uniform->descriptor;
+    projection_view_descriptor.descriptorCount = 1;
+
+    VkWriteDescriptorSet models_descriptor = {};
+    models_descriptor.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    models_descriptor.dstSet          = scene_descriptor_set;
+    models_descriptor.descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+    models_descriptor.dstBinding      = 1;
+    models_descriptor.pBufferInfo     = &uniform_buffers.dynamic_uniform->descriptor;
+    models_descriptor.descriptorCount = 1;
+    
+
+    std::vector<VkWriteDescriptorSet> write_descriptor_sets = 
+    {
+        projection_view_descriptor,
+        models_descriptor
+    };
+
+    vkUpdateDescriptorSets(*device, static_cast<uint32_t>(write_descriptor_sets.size()), write_descriptor_sets.data(), 0, nullptr);
+}
+
+void Renderer::setup_materials_descriptors()
+{
+    // TODO: Priority 2
+}
+
+void Renderer::setup_static_mesh_buffer()
+{
+    // TODO: Priority 3
+}
+
+void Renderer::setup_uniform_buffers()
+{
+    size_t min_alignment = device->properties.limits.minUniformBufferOffsetAlignment;
+    dynamic_uniform_alignment = sizeof(glm::mat4);
+    if(min_alignment > 0)
+        dynamic_uniform_alignment = (dynamic_uniform_alignment + min_alignment - 1) & ~(min_alignment - 1);
+
+    size_t actors_count = actors_container.get_actors().size();
+    if(actors_count == 0)
+        throw std::runtime_error("No actors in scene graph");
+
+    size_t buffer_size = actors_count * dynamic_uniform_alignment;
+
+    dynamic_uniform_data.models = static_cast<glm::mat4*>(aligned_allocate(buffer_size, dynamic_uniform_alignment));
+    assert(dynamic_uniform_data.models != nullptr);
+
+    vk_assert
+    (
+        device->create_buffer
+        (
+            VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, 
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
+            uniform_buffers.static_uniform,
+            sizeof(static_uniform_data)
+        ),
+        "Can't create buffer for static uniform"
+    );
+
+    vk_assert
+    (
+        device->create_buffer
+        (
+            VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+            uniform_buffers.dynamic_uniform,
+            buffer_size
+        ),
+        "Can't create buffer for dynamic uniform"
+    );
+
+    vk_assert
+    (
+        uniform_buffers.static_uniform->map(),
+        "Can't map memory on static uniform"
+    );
+
+    vk_assert
+    (
+        uniform_buffers.dynamic_uniform->map(),
+        "Can't map on dynamic uniform"
+    );
+
+    update_static_uniform();
+    update_dynamic_uniform();
+}
+
+void Renderer::update_static_uniform()
+{
+    auto camera = camera_selector.get_current_camera();
+    static_uniform_data.projection = camera->get_perspective_matrix();
+    static_uniform_data.view       = camera->get_model_matrix();
+
+    std::memcpy(uniform_buffers.static_uniform->mapped_memory, &static_uniform_data, sizeof(static_uniform_data));
+}
+
+void Renderer::update_dynamic_uniform()
+{
+    auto &actors = actors_container.get_actors();
+    for(size_t i = 0, actors_count = actors.size(); i < actors_count; ++i)
+        if(actors[i]->is_changed())
+            dynamic_uniform_data.models[i * dynamic_uniform_alignment] = actors[i]->get_model_matrix();
+
+    std::memcpy(uniform_buffers.dynamic_uniform->mapped_memory, &dynamic_uniform_data, sizeof(dynamic_uniform_data));
+    VkMappedMemoryRange memory_range = {};
+    memory_range.sType  = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+    memory_range.memory = uniform_buffers.dynamic_uniform->memory;
+    memory_range.size   = uniform_buffers.dynamic_uniform->size;
+    vkFlushMappedMemoryRanges(*device, 1, &memory_range);
 }
 
 void Renderer::setup_descriptor_pool(uint32_t samplers_count)
@@ -918,4 +1083,9 @@ VkCommandPool Renderer::get_command_pool() const
 VkQueue Renderer::get_queue() const
 {
     return queue;
+}
+
+void Renderer::on_key_pressed(const Key &key)
+{
+
 }

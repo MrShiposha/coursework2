@@ -4,6 +4,7 @@
 #include "vkassert.h"
 
 Swapchain::Swapchain()
+: swapchain(VK_NULL_HANDLE)
 {}
 
 void Swapchain::initialize_surface(const Window &window)

@@ -13,6 +13,9 @@
 #include "swapchain.h"
 
 #include "scenegraph.h"
+#include "detail/actorscontainer.h"
+#include "detail/cameraselector.h"
+#include "detail/meshselector.h"
 
 enum class VulkanValidationMode
 {
@@ -62,17 +65,27 @@ public:
     void setup_descriptor_pool(uint32_t samplers_count);
     void setup_scene_descriptor_set_layout();
     void setup_materials_descriptor_set_layout();
-
     void setup_static_mesh_pipeline_layout();
-    void setup_static_mesh_descriptors();
+
+    void setup_scene_descriptors();
+    void setup_materials_descriptors();
+
+    void setup_static_mesh_buffer();
+
+    void setup_uniform_buffers();
 
     void view_changed();
+
+    void update_static_uniform();
+    void update_dynamic_uniform();
 
     void destroy_command_buffers();
 
     std::shared_ptr<Device> get_device() const;
     VkCommandPool get_command_pool() const;
     VkQueue get_queue() const;
+
+    virtual void on_key_pressed(const Key &) override;
 
 private:
     void draw();
@@ -155,6 +168,8 @@ private:
         std::shared_ptr<DeviceBuffer> dynamic_uniform;
     } uniform_buffers;
 
+    size_t dynamic_uniform_alignment;
+
     struct StaticUniformData
     {
         glm::mat4 projection;
@@ -190,6 +205,9 @@ private:
     {
         VkPipeline static_mesh;
     } pipelines;
+
+    ActorsContainer actors_container;
+    CameraSelector camera_selector;
 };
 
 #endif // CG_SEM5_RENDERER_H

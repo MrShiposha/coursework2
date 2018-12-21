@@ -1,24 +1,24 @@
-#include "meshselectorvisitor.h"
+#include "meshselector.h"
 
-MeshSelectorVisitor::MeshSelectorVisitor()
+MeshSelector::MeshSelector()
 : current_mesh(0)
 {}
 
-void MeshSelectorVisitor::visit_up(std::shared_ptr<SceneNode>)
+void MeshSelector::visit_up(std::shared_ptr<SceneNode>)
 {}
 
-void MeshSelectorVisitor::visit_down(std::shared_ptr<SceneNode> node)
+void MeshSelector::visit_down(std::shared_ptr<SceneNode> node)
 {
     if(auto mesh = std::dynamic_pointer_cast<AbstractMesh>(node))
         meshes.push_back(mesh);
 }
 
-void MeshSelectorVisitor::reset_current_mesh()
+void MeshSelector::reset_current_mesh()
 {
     current_mesh = 0;
 }
 
-std::shared_ptr<AbstractMesh> MeshSelectorVisitor::get_next_mesh()
+std::shared_ptr<AbstractMesh> MeshSelector::get_next_mesh()
 {
     if(meshes.empty())
         return nullptr;

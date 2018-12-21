@@ -1,15 +1,15 @@
-#ifndef CG_SEM5_DETAIL_MATERIALCOUNTERVISITOR_H
-#define CG_SEM5_DETAIL_MATERIALCOUNTERVISITOR_H
+#ifndef CG_SEM5_DETAIL_MATERIALCOUNTER_H
+#define CG_SEM5_DETAIL_MATERIALCOUNTER_H
 
 #include <cstdint>
 #include <cstddef>
 
 #include "../scenegraphvisitor.h"
 
-class MaterialCounterVisitor : public SceneGraphVisitor
+class MaterialCounter : public SceneGraphVisitor
 {
 public:
-    MaterialCounterVisitor();
+    MaterialCounter();
 
     uint32_t get_materials_count() const;
 
@@ -20,4 +20,4 @@ private:
     uint32_t materials_count;
 };
 
-#endif // CG_SEM5_DETAIL_MATERIALCOUNTERVISITOR_H
+#endif // CG_SEM5_DETAIL_MATERIALCOUNTER_H

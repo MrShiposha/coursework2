@@ -17,6 +17,9 @@ public:
     void set_model_matrix(const glm::mat4 &);
     Actor &model_matrix(const glm::mat4 &);
 
+    void translate(const glm::vec3 &);
+    void rotate(const glm::vec3 &, const glm::vec3 &axis);
+
 private:
     glm::mat4 model;
 };

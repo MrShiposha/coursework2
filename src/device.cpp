@@ -191,7 +191,7 @@ VkResult Device::create_buffer
 {
     VkBufferCreateInfo buffer_create_info = {};
     buffer_create_info.sType              = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    buffer_create_info.flags              = usage_flags;
+    buffer_create_info.usage              = usage_flags;
     buffer_create_info.size               = buffer_size;
     buffer_create_info.sharingMode        = VK_SHARING_MODE_EXCLUSIVE;
     
@@ -262,8 +262,8 @@ VkResult Device::create_buffer
 
     VkBufferCreateInfo buffer_create_info = {};
     buffer_create_info.sType              = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    buffer_create_info.flags              = usage_flags;
-    buffer_create_info.size               = device_buffer->size;
+    buffer_create_info.usage              = usage_flags;
+    buffer_create_info.size               = size;
     buffer_create_info.sharingMode        = VK_SHARING_MODE_EXCLUSIVE;
     
     vk_assert

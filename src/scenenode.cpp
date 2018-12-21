@@ -4,11 +4,11 @@
 static size_t default_id = 0;
 
 SceneNode::SceneNode()
-: id("node" + std::to_string(default_id++))
+: id("node" + std::to_string(default_id++)), changed(true)
 {}
 
 SceneNode::SceneNode(std::string_view id)
-: id(id.data())
+: id(id.data()), changed(true)
 {}
 
 SceneNode::~SceneNode()
@@ -32,4 +32,24 @@ const std::string &SceneNode::get_id() const
 void SceneNode::set_id(std::string_view id)
 {
     this->id = id.data();
+}
+
+bool SceneNode::is_changed() const
+{
+    return changed;
+}
+
+void SceneNode::set_changed(bool changed)
+{
+    this->changed = changed;
+}
+
+void SceneNode::mark_changed()
+{
+    changed = true;
+}
+
+void SceneNode::mark_unchanged()
+{
+    changed = false;
 }

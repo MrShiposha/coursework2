@@ -20,8 +20,15 @@ public:
     const std::string &get_id() const;
     void set_id(std::string_view id);
 
+    bool is_changed() const;
+    void set_changed(bool);
+    void mark_changed();
+    void mark_unchanged();
+    
 protected:
     std::string id;
+
+    bool changed;
 };
 
 #endif // CG_SEM5_COURSEWORK_SCENENODE_H

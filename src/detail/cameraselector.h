@@ -1,5 +1,5 @@
-#ifndef CG_SEM5_CAMERASELECTORVISITOR_H
-#define CG_SEM5_CAMERASELECTORVISITOR_H
+#ifndef CG_SEM5_CAMERASELECTOR_H
+#define CG_SEM5_CAMERASELECTOR_H
 
 #include <stdexcept>
 #include <cstdint>
@@ -9,15 +9,16 @@
 #include "../scenegraphvisitor.h"
 #include "../camera.h"
 
-class CameraSelectorVisitor : public SceneGraphVisitor
+class CameraSelector : public SceneGraphVisitor
 {
 public:
-    CameraSelectorVisitor();
+    CameraSelector();
 
     virtual void visit_up(std::shared_ptr<SceneNode>) override;
     virtual void visit_down(std::shared_ptr<SceneNode>) override;
 
     void reset_current_camera();
+    std::shared_ptr<Camera> get_current_camera() const;
     std::shared_ptr<Camera> get_next_camera();
 
 private:
@@ -25,4 +26,4 @@ private:
     std::vector<std::shared_ptr<Camera>> cameras;
 };
 
-#endif // CG_SEM5_CAMERASELECTORVISITOR_H
+#endif // CG_SEM5_CAMERASELECTOR_H
