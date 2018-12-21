@@ -103,6 +103,18 @@ VkResult Device::initialize_logical_device
 )
 {
     std::vector<VkDeviceQueueCreateInfo> queue_create_infos;
+    auto is_create_info_unique = [&](QueueFamilyIndex index)
+    {
+        return std::find_if
+        (
+            queue_create_infos.begin(),
+            queue_create_infos.end(),
+            [&index](const auto &create_info)
+            {
+                return create_info.queueFamilyIndex == index;
+            }
+        ) == queue_create_infos.end();
+    };
 
     const float default_queue_priority = 0.f;
 
@@ -127,8 +139,10 @@ VkResult Device::initialize_logical_device
         queue_info.queueFamilyIndex        = queue_family_indices.compute;
         queue_info.queueCount              = 1;
         queue_info.pQueuePriorities        = &default_queue_priority;
-        queue_create_infos.push_back(queue_info);
 
+        // Ensure unique create infos
+        if(is_create_info_unique(queue_family_indices.compute)) 
+            queue_create_infos.push_back(queue_info);
     }
     else
         queue_family_indices.compute = queue_family_indices.graphics;
@@ -141,8 +155,9 @@ VkResult Device::initialize_logical_device
         queue_info.queueFamilyIndex        = queue_family_indices.transfer;
         queue_info.queueCount              = 1;
         queue_info.pQueuePriorities        = &default_queue_priority;
-        queue_create_infos.push_back(queue_info);
 
+        if(is_create_info_unique(queue_family_indices.transfer))
+            queue_create_infos.push_back(queue_info);
     }
     else
         queue_family_indices.transfer = queue_family_indices.graphics;
