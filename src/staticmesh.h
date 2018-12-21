@@ -78,6 +78,9 @@ public:
     virtual const void *get_raw_vertices_data() const override;
     virtual const void *get_raw_indices_data() const override;
 
+    const std::vector<Vertex> &get_vertices() const;
+    const std::vector<MeshElementIndex> &get_indices() const;
+
     const std::vector<Part> &get_parts() const;
     const std::vector<Material> &get_materials() const;
 

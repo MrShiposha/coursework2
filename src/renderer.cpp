@@ -517,6 +517,7 @@ void Renderer::prepare(SceneGraph &scenegraph)
 
     {
         setup_materials_descriptors();
+        setup_static_mesh_buffer();
     }
 
     create_pipelines();
@@ -944,7 +945,134 @@ void Renderer::setup_materials_descriptors()
 
 void Renderer::setup_static_mesh_buffer()
 {
-    // TODO: Priority 3
+    auto &meshes = static_meshes.get_meshes();
+    std::vector<StaticMesh::Vertex> vertices;
+    std::vector<MeshElementIndex> indices;
+
+    for(auto &&mesh : meshes)
+    {
+        auto &mesh_vertices = mesh->get_vertices();
+        auto &mesh_indices = mesh->get_indices();
+        vertices.insert(vertices.end(), mesh_vertices.begin(), mesh_vertices.end());
+        indices.insert(indices.end(), mesh_indices.begin(), mesh_indices.end());
+    }
+
+    uint32_t vertex_data_size = static_cast<uint32_t>(vertices.size()) * sizeof(StaticMesh::Vertex);
+    uint32_t index_data_size = static_cast<uint32_t>(indices.size()) * sizeof(MeshElementIndex);
+
+    if(vertex_data_size == 0 || index_data_size == 0)
+        return;
+
+    auto vertex_staging = std::make_shared<DeviceBuffer>();
+    auto index_staging = std::make_shared<DeviceBuffer>();
+
+    vk_assert
+    (
+        device->create_buffer
+        (
+            VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
+            vertex_staging, 
+            vertex_data_size, 
+            vertices.data()
+        ),
+        "Can't create staging buffer for static mesh vertices"
+    );
+
+    vk_assert
+    (
+        device->create_buffer
+        (        
+            VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            vertex_buffer,
+            vertex_data_size
+        ),
+        "Can't create target buffer for static mesh vertices"
+    );
+
+    vk_assert
+    (
+        device->create_buffer
+        (
+            VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
+            index_staging, 
+            index_data_size, 
+            indices.data()
+        ),
+        "Can't create staging buffer for static mesh indices"
+    );
+
+    vk_assert
+    (
+        device->create_buffer
+        (        
+            VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            index_buffer,
+            index_data_size
+        ),
+        "Can't create target buffer for static mesh vertices"
+    );
+
+    // Copy from staging to target
+    VkCommandBuffer copy_cmd = device->create_command_buffer(command_pool, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+
+    VkCommandBufferBeginInfo begin_info = {};
+    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    
+    vk_assert
+    (
+        vkBeginCommandBuffer(copy_cmd, &begin_info),
+        "Can't copy data from staging to target"
+    );
+
+    VkBufferCopy copy_region = {};
+    copy_region.size = vertex_data_size;
+    vkCmdCopyBuffer
+    (
+        copy_cmd,
+        *vertex_staging,
+        *vertex_buffer,
+        1,
+        &copy_region
+    );
+
+    copy_region.size = index_data_size;
+    vkCmdCopyBuffer
+    (
+        copy_cmd,
+        *index_staging,
+        *index_buffer,
+        1,
+        &copy_region
+    );
+
+    vk_assert
+    (
+        vkEndCommandBuffer(copy_cmd),
+        "Can't finish copying from staging to target"
+    );
+
+    VkSubmitInfo submit_info = {};
+    submit_info.sType              = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submit_info.commandBufferCount = 1;
+    submit_info.pCommandBuffers    = &copy_cmd;
+
+    vk_assert
+    (
+        vkQueueSubmit(queue, 1, &submit_info, VK_NULL_HANDLE),
+        "Can't submit copy command to queue"
+    );
+
+    vk_assert
+    (
+        vkQueueWaitIdle(queue),
+        "Can't wait copy queue"
+    );
+
+    // TODO: fence
 }
 
 void Renderer::setup_uniform_buffers()

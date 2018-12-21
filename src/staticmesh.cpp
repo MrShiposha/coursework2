@@ -106,6 +106,16 @@ const void *StaticMesh::get_raw_indices_data() const
     return static_cast<const void*>(indices.data());
 }
 
+const std::vector<StaticMesh::Vertex> &StaticMesh::get_vertices() const
+{
+    return vertices;
+}
+
+const std::vector<MeshElementIndex> &StaticMesh::get_indices() const
+{
+    return indices;
+}
+
 const std::vector<StaticMesh::Part> &StaticMesh::get_parts() const
 {
     return parts;
