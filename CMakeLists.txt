@@ -16,7 +16,15 @@ REQUIRE_CXX_17()
 
 if(${SYSTEM} STREQUAL "darwin")
     add_macos_bundle(${CMAKE_PROJECT_NAME})
+else()
+    add_executable(${CMAKE_PROJECT_NAME} ${${CMAKE_PROJECT_NAME}_SOURCES})
+    target_link_libraries(${CMAKE_PROJECT_NAME} ${${CMAKE_PROJECT_NAME}_LIBRARIES})
+    set_executable_directory(${CMAKE_PROJECT_NAME})
 endif()
 
 compile_shaders(${CMAKE_PROJECT_NAME})
 copy_directory(${CMAKE_PROJECT_NAME} ${CMAKE_SOURCE_DIR}/resources ${${CMAKE_PROJECT_NAME}_EXECUTABLE_DIRECTORY}/resources)
+
+if(${SYSTEM} STREQUAL "windows")
+    copy_target_dlls(${CMAKE_PROJECT_NAME})
+endif()

@@ -11,6 +11,8 @@
 #include "devicebuffer.h"
 #include "vkdef.h"
 
+#undef max
+
 using QueueFamilyIndex = uint32_t;
 using MemoryTypeIndex  = uint32_t;
 

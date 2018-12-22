@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <fstream>
+#include <cassert>
 
 #include "device.h"
 #include "vkassert.h"

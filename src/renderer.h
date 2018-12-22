@@ -5,6 +5,8 @@
 #include <array>
 
 #include <vulkan/vulkan.h>
+
+#define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
 
 #include "abstractrenderer.h"

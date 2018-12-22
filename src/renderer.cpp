@@ -34,7 +34,10 @@ VKAPI_ATTR VkBool32 VKAPI_CALL message_callback
 );
 
 Renderer::Renderer(std::string_view application_name, Window &window, VulkanValidationMode mode)
-: AbstractRenderer(window), application_name(application_name.data()), validation_mode(mode),
+: AbstractRenderer(window), 
+application_name(application_name.data()), 
+validation_mode(mode),
+submit_info(),
 width(window.get_view_size().width), height(window.get_view_size().height),
 current_buffer(0),
 is_prepared(false),
@@ -57,6 +60,7 @@ uniform_buffers
 
 Renderer::~Renderer()
 {
+    vkDeviceWaitIdle(*device);
     free_debugging();
 
     swapchain.cleanup();
@@ -252,6 +256,8 @@ void Renderer::create_instance()
 
 #if defined (VK_USE_PLATFORM_MACOS_MVK)
         VK_MVK_MACOS_SURFACE_EXTENSION_NAME
+#elif defined(VK_USE_PLATFORM_WIN32_KHR)
+        VK_KHR_WIN32_SURFACE_EXTENSION_NAME
 #endif // OS
     };
 
@@ -478,9 +484,7 @@ void Renderer::setup_swapchain()
 
 void Renderer::initialize_swapchain()
 {
-#if defined(VK_USE_PLATFORM_MACOS_MVK)
     swapchain.initialize_surface(this->window);
-#endif // OS
 }
 
 void Renderer::create_pipeline_cache()
@@ -811,8 +815,8 @@ void Renderer::fill_command_buffers()
         vkCmdBeginRenderPass(draw_command_buffers[i], &renderpass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
 
         VkViewport viewport = {};
-        viewport.width      = width;
-        viewport.height     = height;
+        viewport.width      = static_cast<float>(width);
+        viewport.height     = static_cast<float>(height);
         viewport.minDepth   = 0.f;
         viewport.maxDepth   = 1.f;
         vkCmdSetViewport(draw_command_buffers[i], 0, 1, &viewport);
@@ -847,7 +851,7 @@ void Renderer::fill_command_buffers()
 
                 vkCmdBindPipeline(draw_command_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.static_mesh);
 
-                uint32_t dynamic_offset = j * static_cast<uint32_t>(dynamic_uniform_alignment);
+                uint32_t dynamic_offset = static_cast<uint32_t>(j) * static_cast<uint32_t>(dynamic_uniform_alignment);
                 vkCmdBindDescriptorSets(draw_command_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layouts.static_mesh, 0, static_cast<uint32_t>(descriptor_sets.size()), descriptor_sets.data(), 1, &dynamic_offset);
 
                 vkCmdPushConstants(draw_command_buffers[i], pipeline_layouts.static_mesh, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(StaticMesh::MaterialProperties), &materials[j].properties);

@@ -2,6 +2,8 @@
 #define CG_SEM5_COURSEWORK_MESH_H
 
 #include <vector>
+
+#define GLM_ENABLE_EXPERIMENTAL
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 

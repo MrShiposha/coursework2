@@ -289,7 +289,7 @@ std::shared_ptr<Texture2D> Texture2D::load_from_file
     sampler_create_info.mipLodBias          = 0.f;
     sampler_create_info.compareOp           = VK_COMPARE_OP_NEVER;
     sampler_create_info.minLod              = 0.f;
-    sampler_create_info.maxLod              = texture->mip_levels; // Max level of detail must match mip level count
+    sampler_create_info.maxLod              = static_cast<float>(texture->mip_levels); // Max level of detail must match mip level count
     sampler_create_info.maxAnisotropy       = device->enabled_features.samplerAnisotropy? 
                                               device->properties.limits.maxSamplerAnisotropy : 1.f;
     sampler_create_info.anisotropyEnable    = device->enabled_features.samplerAnisotropy;

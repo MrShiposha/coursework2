@@ -1,6 +1,7 @@
 #ifndef CG_SEM5_ACTOR_H
 #define CG_SEM5_ACTOR_H
 
+#define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
 
 #include "scenenode.h"

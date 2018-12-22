@@ -49,6 +49,12 @@ public:
 
 private:
     void *handle;
+
+    std::function<void()>                 resize_callback;
+    std::function<void(int32_t, int32_t)> mouse_move_callback;
+    std::function<void(MouseButton)>      mouse_down_callback;
+    std::function<void(MouseButton)>      mouse_up_callback;
+    std::function<void(const Key &)>      key_callback;
 };
 
 #endif // CG_SEM5_COURSEWORK_WINDOW_H

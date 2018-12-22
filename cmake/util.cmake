@@ -76,6 +76,8 @@ ENDMACRO()
 macro(set_executable_directory target)
     if(${SYSTEM} STREQUAL "darwin")
         set(${target}_EXECUTABLE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_BUILD_TYPE}/${target}.app/Contents/MacOS)
+    else()
+        set(${target}_EXECUTABLE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_BUILD_TYPE})
     endif()
 endmacro()
 
@@ -101,4 +103,12 @@ macro(copy_directory target from_dir to_dir)
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${from_dir} ${to_dir}
         COMMENT "Copying directory ${from_dir} -> ${to_dir}"
     )
+endmacro()
+
+macro(copy_target_dlls target_name)
+    file(GLOB dlls ${CMAKE_SOURCE_DIR}/lib/${SYSTEM}/bin/*${CMAKE_SHARED_LIBRARY_SUFFIX})
+
+    foreach(dll ${dlls})
+        file(COPY ${dll} DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_BUILD_TYPE})
+    endforeach(dll ${dlls})
 endmacro()

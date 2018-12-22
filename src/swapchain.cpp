@@ -1,4 +1,11 @@
 #include <limits>
+#include <cassert>
+
+#ifdef _MSC_VER
+    #include <Windows.h>
+    #undef max
+    #undef min
+#endif // Windows
 
 #include "swapchain.h"
 #include "vkassert.h"
@@ -18,6 +25,13 @@ void Swapchain::initialize_surface(const Window &window)
     surface_create_info.flags = 0;
     surface_create_info.pView = window.get_view();
     result = vkCreateMacOSSurfaceMVK(instance, &surface_create_info, NULL, &surface);
+#elif defined(VK_USE_PLATFORM_WIN32_KHR)
+    VkWin32SurfaceCreateInfoKHR surface_create_info = {};
+    surface_create_info.sType     = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
+    surface_create_info.hinstance = GetModuleHandle(nullptr);
+    surface_create_info.hwnd      = static_cast<HWND>(window.get_view());
+
+    result = vkCreateWin32SurfaceKHR(instance, &surface_create_info, nullptr, &surface); 
 #endif 
 
     if(result != VK_SUCCESS)

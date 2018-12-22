@@ -1,3 +1,4 @@
+#define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtc/type_ptr.hpp>
 
 #include "staticmesh.h"
@@ -9,7 +10,8 @@ void load_materials
     std::shared_ptr<Device> device,
     VkCommandPool command_pool,
     VkQueue copy_queue,
-    std::vector<StaticMesh::Material> &
+    std::vector<StaticMesh::Material> &materials,
+    std::vector<decltype(materials.begin())> &to_erase
 );
 
 void load_parts
@@ -45,8 +47,13 @@ std::shared_ptr<StaticMesh> StaticMesh::load_from_file
     if(scene == nullptr)
         throw std::runtime_error("Can't load mesh from file \""s + path.data() + "\"");
 
-    load_materials(scene, path, device, command_pool, copy_queue, materials);
+    std::vector<decltype(materials.begin())> to_erase;
+
+    load_materials(scene, path, device, command_pool, copy_queue, materials, to_erase);
     load_parts(scene, materials, parts, vertices, indices);
+
+    for(auto &&it : to_erase)
+        materials.erase(it);
 
     return std::shared_ptr<StaticMesh>
     (
@@ -134,11 +141,10 @@ void load_materials
     std::shared_ptr<Device> device,
     VkCommandPool command_pool,
     VkQueue copy_queue,
-    std::vector<StaticMesh::Material> &materials
+    std::vector<StaticMesh::Material> &materials,
+    std::vector<decltype(materials.begin())> &to_erase
 )
 {
-    std::vector<decltype(materials.begin())> to_erase;
-
     materials.resize(scene->mNumMaterials);
     for(size_t i = 0; i < materials.size(); ++i)
     {
@@ -197,9 +203,6 @@ void load_materials
         compressed_texture_file.insert(compressed_texture_file.find(".ktx"), texture_format_suffix); // !!!
         materials[i].diffuse = Texture2D::load_from_file(compressed_texture_file, texture_format, device, command_pool, copy_queue);
     }
-
-    for(auto &&it : to_erase)
-        materials.erase(it);
 }
 
 void load_parts
