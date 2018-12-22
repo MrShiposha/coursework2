@@ -8,6 +8,13 @@ struct Key
         NONE    = 0x0,
         COMMAND = 0x1
     } modifiers;
+
+    enum class State : unsigned int
+    {
+        PRESSED,
+        RELEASED
+    } state;
+
     unsigned int code;
 };
 

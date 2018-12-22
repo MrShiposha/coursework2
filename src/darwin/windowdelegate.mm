@@ -56,6 +56,25 @@
         {
             Key key = {};
             key.code = chars[0];
+            key.state = Key::State::PRESSED;
+
+            if(event.modifierFlags & NSEventModifierFlagCommand) {
+                key.modifiers = Key::Modifiers::COMMAND;
+            }
+
+            key_callback(key);
+        }
+    }
+}
+
+-(void)keyUp:(NSEvent *)event {
+    if(event.type == NSEventTypeKeyUp) {
+        const char *chars = [event.charactersIgnoringModifiers UTF8String];
+        if(chars[0] != '\0')
+        {
+            Key key = {};
+            key.code = chars[0];
+            key.state = Key::State::RELEASED;
 
             if(event.modifierFlags & NSEventModifierFlagCommand) {
                 key.modifiers = Key::Modifiers::COMMAND;

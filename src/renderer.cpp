@@ -1375,5 +1375,7 @@ VkQueue Renderer::get_queue() const
 
 void Renderer::on_key_pressed(const Key &key)
 {
-
+    std::cout << "key: " << (char)key.code;
+    std::cout << " / mod: " << (unsigned int)key.modifiers;
+    std::cout << " / state: " << (unsigned int)key.state << std::endl;
 }
