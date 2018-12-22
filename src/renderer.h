@@ -15,6 +15,7 @@
 #include "swapchain.h"
 
 #include "scenegraph.h"
+#include "actorcontroller.h"
 #include "detail/actorscontainer.h"
 #include "detail/staticmeshescontainer.h"
 #include "detail/cameraselector.h"
@@ -88,7 +89,13 @@ public:
     VkCommandPool get_command_pool() const;
     VkQueue get_queue() const;
 
-    virtual void on_key_pressed(const Key &) override;
+    virtual void on_mouse_move(int32_t x, int32_t y) override;
+
+    virtual void on_mouse_down(MouseButton) override;
+
+    virtual void on_mouse_up(MouseButton) override;
+
+    virtual void on_key(const Key &) override;
 
 private:
     void draw();
@@ -212,6 +219,10 @@ private:
     ActorsContainer actors_container;
     StaticMeshesContainer static_meshes;
     CameraSelector camera_selector;
+
+    ActorController controller;
+    glm::vec2 last_mouse_position;
+    bool is_rotation_active;
 };
 
 #endif // CG_SEM5_RENDERER_H

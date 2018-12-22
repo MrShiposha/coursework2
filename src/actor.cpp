@@ -46,11 +46,9 @@ void Actor::translate(const glm::vec3 &translation)
     this->changed = true;
 }
 
-void Actor::rotate(const glm::vec3 &rotation, const glm::vec3 &axis)
+void Actor::rotate(float angle, const glm::vec3 &axis)
 {
-    model = glm::rotate(model, rotation.x, axis);
-    model = glm::rotate(model, rotation.y, axis);
-    model = glm::rotate(model, rotation.z, axis);
+    model = glm::rotate(model, angle, axis);
     this->changed = true;
 }
 

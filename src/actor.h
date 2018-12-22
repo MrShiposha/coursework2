@@ -19,7 +19,7 @@ public:
     Actor &model_matrix(const glm::mat4 &);
 
     void translate(const glm::vec3 &);
-    void rotate(const glm::vec3 &, const glm::vec3 &axis);
+    void rotate(float angle, const glm::vec3 &axis);
     void scale(const glm::vec3 &);
 
 private:

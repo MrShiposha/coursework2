@@ -115,7 +115,10 @@ pipeline_layouts
 pipelines
 ({
     VK_NULL_HANDLE
-})
+}),
+controller(7.5f, 0.5f),
+last_mouse_position(0.f),
+is_rotation_active(false)
 {
     initialize_vulkan();
     initialize();
@@ -182,6 +185,13 @@ void Renderer::render()
     frame_timer = static_cast<double>(time_diff) / 1000.0;
 
     // TODO: Update actor controller
+    controller.update(frame_timer);
+    
+    update_dynamic_uniform();
+    update_static_uniform();
+
+    for(auto &&actor : actors_container.get_actors())
+        actor->mark_unchanged();
 
     timer += timer_speed * frame_timer;
     if(timer > 1.0)
@@ -593,6 +603,8 @@ void Renderer::prepare(SceneGraph &scenegraph)
 
     create_pipelines();
     fill_command_buffers();
+
+    controller.set_actor(camera_selector.get_current_camera());
 
     is_prepared = true;
 }
@@ -1242,6 +1254,9 @@ void Renderer::setup_uniform_buffers()
 void Renderer::update_static_uniform()
 {
     auto camera = camera_selector.get_current_camera();
+    if(!camera->is_changed())
+        return;
+
     static_uniform_data.projection = camera->get_perspective_matrix();
     static_uniform_data.view       = camera->get_model_matrix();
 
@@ -1250,13 +1265,20 @@ void Renderer::update_static_uniform()
 
 void Renderer::update_dynamic_uniform()
 {
+    bool at_least_one_changed = false;
     auto &actors = actors_container.get_actors();
     for(size_t i = 0, actors_count = actors.size(); i < actors_count; ++i)
+    {
         if(actors[i]->is_changed())
         {
+            at_least_one_changed = true;
             glm::mat4 *model = reinterpret_cast<glm::mat4*>(reinterpret_cast<uint64_t>(dynamic_uniform_data.models) + (i * dynamic_uniform_alignment));
             *model = actors[i]->get_model_matrix();
         }
+    }
+
+    if(!at_least_one_changed)
+        return;
 
     std::memcpy(uniform_buffers.dynamic_uniform->mapped_memory, dynamic_uniform_data.models, uniform_buffers.dynamic_uniform->size);
     
@@ -1373,9 +1395,70 @@ VkQueue Renderer::get_queue() const
     return queue;
 }
 
-void Renderer::on_key_pressed(const Key &key)
+void Renderer::on_key(const Key &key)
 {
+    if(key.modifiers == Key::Modifiers::NONE)
+    {
+        if(key.state == Key::State::PRESSED)
+        {
+            int movement = ActorController::Movement::NO;
+
+            if(key.code == 'w')
+                movement |= ActorController::Movement::FORWARD;
+            if(key.code == 'a')
+                movement |= ActorController::Movement::LEFT;
+            if(key.code == 's')
+                movement |= ActorController::Movement::BACKWARD;
+            if(key.code == 'd')
+                movement |= ActorController::Movement::RIGHT;
+            
+            controller.set_movement(static_cast<ActorController::Movement>(movement));
+        }
+        else if(key.state == Key::State::RELEASED)
+        {
+            int movement = static_cast<int>(controller.get_movement());
+
+            if(key.code == 'w')
+                movement ^= ActorController::Movement::FORWARD;
+            if(key.code == 'a')
+                movement ^= ActorController::Movement::LEFT;
+            if(key.code == 's')
+                movement ^= ActorController::Movement::BACKWARD;
+            if(key.code == 'd')
+                movement ^= ActorController::Movement::RIGHT;
+            
+            controller.set_movement(static_cast<ActorController::Movement>(movement));
+        }
+    }
+
     std::cout << "key: " << (char)key.code;
     std::cout << " / mod: " << (unsigned int)key.modifiers;
     std::cout << " / state: " << (unsigned int)key.state << std::endl;
+}
+
+void Renderer::on_mouse_down(MouseButton button)
+{
+    if(button == MouseButton::LEFT)
+    {
+        is_rotation_active = !is_rotation_active;
+    }
+}
+
+void Renderer::on_mouse_up(MouseButton button)
+{
+}
+
+void Renderer::on_mouse_move(int32_t x, int32_t y)
+{
+    if(is_rotation_active)
+    {
+        float dx = last_mouse_position.x - static_cast<float>(x);
+        float dy = last_mouse_position.y - static_cast<float>(y);
+
+        std::cout << "rotation: " << dx << ", " << dy << std::endl;
+        controller.rotate(dx, dy);
+    }
+
+    last_mouse_position.x = static_cast<float>(x);
+    last_mouse_position.y = static_cast<float>(y);
 }

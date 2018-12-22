@@ -31,7 +31,11 @@ public:
 
     bool is_right_mouse_button_released() const;
 
-    virtual void on_key_pressed(const Key &);
+    virtual void on_key(const Key &);
+
+    virtual void on_mouse_down(MouseButton);
+
+    virtual void on_mouse_up(MouseButton);
 
 protected:
     Window &window;

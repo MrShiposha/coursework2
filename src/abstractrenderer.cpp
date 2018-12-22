@@ -13,6 +13,8 @@ AbstractRenderer::AbstractRenderer(Window &window)
             mouse_buttons.left = true;
         else
             mouse_buttons.right = true;
+
+        on_mouse_down(button);
     });
 
     window.set_mouse_up_callback([this](MouseButton button)
@@ -21,9 +23,11 @@ AbstractRenderer::AbstractRenderer(Window &window)
             mouse_buttons.left = false;
         else
             mouse_buttons.right = false;
+
+        on_mouse_up(button);
     });
 
-    window.set_key_callback([this](const Key &key) { on_key_pressed(key); });
+    window.set_key_callback([this](const Key &key) { on_key(key); });
 }
 
 AbstractRenderer::~AbstractRenderer()
@@ -55,5 +59,11 @@ bool AbstractRenderer::is_right_mouse_button_released() const
     return !mouse_buttons.right;
 }
 
-void AbstractRenderer::on_key_pressed(const Key &key)
+void AbstractRenderer::on_key(const Key &key)
+{}
+
+void AbstractRenderer::on_mouse_down(MouseButton button)
+{}
+
+void AbstractRenderer::on_mouse_up(MouseButton button)
 {}
