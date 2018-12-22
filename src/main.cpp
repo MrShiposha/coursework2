@@ -30,6 +30,8 @@ int main() try
         256.f
     );
 
+    camera->translate(glm::vec3(0.0, -0.5f, -1.15f));
+
     scenegraph.add_node(camera);
 
     setup_scene(renderer, scenegraph);

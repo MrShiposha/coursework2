@@ -20,6 +20,7 @@ public:
 
     void translate(const glm::vec3 &);
     void rotate(const glm::vec3 &, const glm::vec3 &axis);
+    void scale(const glm::vec3 &);
 
 private:
     glm::mat4 model;

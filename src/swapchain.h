@@ -23,7 +23,7 @@ public:
     void connect(VkInstance, VkPhysicalDevice, VkDevice);
     void create(uint32_t *width, uint32_t *height, bool vsync = false);
     VkResult acquire_next_image(VkSemaphore present_complete_semaphore, uint32_t *image_index);
-    VkResult queue_present(VkQueue queue, uint32_t image_index, VkSemaphore wait_semaphore = VK_NULL_HANDLE);
+    VkResult queue_present(VkQueue queue, uint32_t image_index, VkSemaphore &wait_semaphore);
     void cleanup();
 
     const VkFormat &get_color_format() const;

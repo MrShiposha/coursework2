@@ -53,3 +53,9 @@ void Actor::rotate(const glm::vec3 &rotation, const glm::vec3 &axis)
     model = glm::rotate(model, rotation.z, axis);
     this->changed = true;
 }
+
+void Actor::scale(const glm::vec3 &scale)
+{
+    model = glm::scale(model, scale);
+    this->changed = true;
+}

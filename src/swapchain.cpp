@@ -353,8 +353,11 @@ VkResult Swapchain::acquire_next_image(VkSemaphore present_complete_semaphore, u
     return fpAcquireNextImageKHR(device, swapchain, std::numeric_limits<size_t>::max(), present_complete_semaphore, (VkFence)nullptr, image_index);
 }
 
-VkResult Swapchain::queue_present(VkQueue queue, uint32_t image_index, VkSemaphore wait_semaphore)
+VkResult Swapchain::queue_present(VkQueue queue, uint32_t image_index, VkSemaphore &wait_semaphore)
 {
+    if(swapchain == VK_NULL_HANDLE) // !
+        return VK_SUCCESS;
+
     VkPresentInfoKHR present_create_info = {};
     present_create_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
     present_create_info.pNext = NULL;

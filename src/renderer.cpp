@@ -2,6 +2,8 @@
 #include <sstream>
 #include <chrono>
 #include <cstdlib>
+#include <thread>
+#include <iostream>
 
 #include "renderer.h"
 #include "vkassert.h"
@@ -18,7 +20,22 @@ void *aligned_allocate(size_t size, size_t alignment)
         memory = nullptr;
 #endif // Compiler
 
+    if(memory)
+    {
+        std::memset(memory, 0, size);
+    }
+
     return memory;
+}
+
+
+void aligned_free(void* data)
+{
+#if	defined(_MSC_VER)
+	_aligned_free(data);
+#else 
+	free(data);
+#endif
 }
 
 VKAPI_ATTR VkBool32 VKAPI_CALL message_callback
@@ -37,8 +54,31 @@ Renderer::Renderer(std::string_view application_name, Window &window, VulkanVali
 : AbstractRenderer(window), 
 application_name(application_name.data()), 
 validation_mode(mode),
-submit_info(),
+debug_report(),
+instance(VK_NULL_HANDLE),
+device(),
+queue(VK_NULL_HANDLE),
+depth_format(),
+depth_stencil
+({
+    VK_NULL_HANDLE,
+    VK_NULL_HANDLE,
+    VK_NULL_HANDLE
+}),
 width(window.get_view_size().width), height(window.get_view_size().height),
+semaphores
+({
+    VK_NULL_HANDLE,
+    VK_NULL_HANDLE
+}),
+submit_pipeline_stages(),
+submit_info(),
+swapchain(),
+framebuffers(),
+renderpass(VK_NULL_HANDLE),
+pipeline_cache(VK_NULL_HANDLE),
+command_pool(VK_NULL_HANDLE),
+draw_command_buffers(),
 current_buffer(0),
 is_prepared(false),
 is_view_updated(false),
@@ -46,12 +86,35 @@ timer(0.0),
 timer_speed(0.25),
 frame_counter(0),
 frame_timer(0.0), fps_timer(0.0), last_fps(0.0),
+descriptor_pool(VK_NULL_HANDLE),
+descriptor_set_layouts
+({
+    VK_NULL_HANDLE,
+    VK_NULL_HANDLE
+}),
+scene_descriptor_set(VK_NULL_HANDLE),
 vertex_buffer(std::make_shared<DeviceBuffer>()),
 index_buffer(std::make_shared<DeviceBuffer>()),
 uniform_buffers
 ({
     std::make_shared<DeviceBuffer>(),
     std::make_shared<DeviceBuffer>()
+}),
+dynamic_uniform_alignment(0),
+static_uniform_data(),
+dynamic_uniform_data(),
+vertex_info
+({
+    {}
+}),
+shader_stages(),
+pipeline_layouts
+({
+    VK_NULL_HANDLE
+}),
+pipelines
+({
+    VK_NULL_HANDLE
 })
 {
     initialize_vulkan();
@@ -60,6 +123,8 @@ uniform_buffers
 
 Renderer::~Renderer()
 {
+    aligned_free(dynamic_uniform_data.models);
+
     vkDeviceWaitIdle(*device);
     free_debugging();
 
@@ -74,9 +139,9 @@ Renderer::~Renderer()
     for(uint32_t i = 0; i < framebuffers.size(); ++i)
         vkDestroyFramebuffer(*device, framebuffers[i], nullptr);
 
-    for(auto &&shader_stage : shader_stages)
-        if(shader_stage.module != VK_NULL_HANDLE)
-            vkDestroyShaderModule(*device, shader_stage.module, nullptr),   
+    // for(auto &&shader_stage : shader_stages)
+    //     if(shader_stage.module != VK_NULL_HANDLE)
+    //         vkDestroyShaderModule(*device, shader_stage.module, nullptr),   
 
     vkDestroyImageView(*device, depth_stencil.view, nullptr);
 	vkDestroyImage(*device, depth_stencil.image, nullptr);
@@ -116,7 +181,7 @@ void Renderer::render()
     auto time_diff = duration_cast<milliseconds>(time_end - time_start).count();
     frame_timer = static_cast<double>(time_diff) / 1000.0;
 
-    // TODO: Update active camera
+    // TODO: Update actor controller
 
     timer += timer_speed * frame_timer;
     if(timer > 1.0)
@@ -179,7 +244,7 @@ void Renderer::initialize_vulkan()
     create_instance();
 
     if(validation_mode == VulkanValidationMode::ENABLED)
-        setup_debugging(VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT);
+        setup_debugging(VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT | VK_DEBUG_REPORT_DEBUG_BIT_EXT);
 
     uint32_t gpu_count = 0;
     vk_assert
@@ -605,6 +670,9 @@ VKAPI_ATTR VkBool32 VKAPI_CALL message_callback
     debug_message << prefix << " [" << layer_prefix << "] Code " << msg_code << " : " << msg;
 
     out << debug_message.str() << std::endl;
+    out.flush();
+
+    std::cout << debug_message.str() << std::endl;
 
     // The return value of this callback controls wether the Vulkan call that caused
     // the validation message will be aborted or not
@@ -833,31 +901,38 @@ void Renderer::fill_command_buffers()
         if(vertex_buffer->size != 0 && index_buffer->size != 0)
         {
             VkDeviceSize offsets[1] = { 0 };
-            vkCmdBindVertexBuffers(draw_command_buffers[i], 0, 1, &vertex_buffer->buffer, offsets);
+            vkCmdBindVertexBuffers(draw_command_buffers[i], STATIC_MESH_BUFFER_ID, 1, &vertex_buffer->buffer, offsets);
             vkCmdBindIndexBuffer(draw_command_buffers[i], index_buffer->buffer, 0, VK_INDEX_TYPE_UINT32);
         }
 
         std::array<VkDescriptorSet, 2> descriptor_sets;
         descriptor_sets[0] = scene_descriptor_set;
 
-        auto &meshes = static_meshes.get_meshes();
-        for(auto &&mesh : meshes)
+        auto &actors = actors_container.get_actors();
+        size_t model_matrix_index = 0;
+
+        for(auto &&actor : actors)
         {
-            auto &materials = mesh->get_materials();
-            auto &parts = mesh->get_parts();
-            for(size_t j = 0, materials_count = materials.size(); j < materials_count; ++j)
+            if(auto mesh = std::dynamic_pointer_cast<StaticMesh>(actor))
             {
-                descriptor_sets[1] = materials[j].descriptor_set;
+                auto &materials = mesh->get_materials();
+                auto &parts = mesh->get_parts();
+                for(size_t j = 0, materials_count = materials.size(); j < materials_count; ++j)
+                {
+                    descriptor_sets[1] = materials[j].descriptor_set;
 
-                vkCmdBindPipeline(draw_command_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.static_mesh);
+                    vkCmdBindPipeline(draw_command_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.static_mesh);
 
-                uint32_t dynamic_offset = static_cast<uint32_t>(j) * static_cast<uint32_t>(dynamic_uniform_alignment);
-                vkCmdBindDescriptorSets(draw_command_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layouts.static_mesh, 0, static_cast<uint32_t>(descriptor_sets.size()), descriptor_sets.data(), 1, &dynamic_offset);
+                    uint32_t dynamic_offset = static_cast<uint32_t>(model_matrix_index) * static_cast<uint32_t>(dynamic_uniform_alignment);
+                    vkCmdBindDescriptorSets(draw_command_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layouts.static_mesh, 0, static_cast<uint32_t>(descriptor_sets.size()), descriptor_sets.data(), 1, &dynamic_offset);
 
-                vkCmdPushConstants(draw_command_buffers[i], pipeline_layouts.static_mesh, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(StaticMesh::MaterialProperties), &materials[j].properties);
+                    vkCmdPushConstants(draw_command_buffers[i], pipeline_layouts.static_mesh, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(StaticMesh::MaterialProperties), &materials[j].properties);
 
-                vkCmdDrawIndexed(draw_command_buffers[i], parts[j].index_count, 1, 0, parts[j].index_base, 0);
+                    vkCmdDrawIndexed(draw_command_buffers[i], parts[j].index_count, 1, 0, parts[j].index_base, 0);
+                }
             }
+
+            ++model_matrix_index;
         }
         /////////////////////
 
@@ -1178,14 +1253,23 @@ void Renderer::update_dynamic_uniform()
     auto &actors = actors_container.get_actors();
     for(size_t i = 0, actors_count = actors.size(); i < actors_count; ++i)
         if(actors[i]->is_changed())
-            dynamic_uniform_data.models[i * dynamic_uniform_alignment] = actors[i]->get_model_matrix();
+        {
+            glm::mat4 *model = reinterpret_cast<glm::mat4*>(reinterpret_cast<uint64_t>(dynamic_uniform_data.models) + (i * dynamic_uniform_alignment));
+            *model = actors[i]->get_model_matrix();
+        }
 
-    std::memcpy(uniform_buffers.dynamic_uniform->mapped_memory, &dynamic_uniform_data, sizeof(dynamic_uniform_data));
+    std::memcpy(uniform_buffers.dynamic_uniform->mapped_memory, dynamic_uniform_data.models, uniform_buffers.dynamic_uniform->size);
+    
     VkMappedMemoryRange memory_range = {};
     memory_range.sType  = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
     memory_range.memory = uniform_buffers.dynamic_uniform->memory;
     memory_range.size   = uniform_buffers.dynamic_uniform->size;
-    vkFlushMappedMemoryRanges(*device, 1, &memory_range);
+    
+    vk_assert
+    (
+        vkFlushMappedMemoryRanges(*device, 1, &memory_range),
+        "Can't flush dynamic uniform"
+    );
 }
 
 void Renderer::setup_descriptor_pool()
@@ -1215,10 +1299,22 @@ void Renderer::setup_descriptor_pool()
 
 void Renderer::setup_scene_descriptor_set_layout()
 {
+    VkDescriptorSetLayoutBinding static_uniform_layout = {};
+    static_uniform_layout.descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    static_uniform_layout.stageFlags      = VK_SHADER_STAGE_VERTEX_BIT;
+    static_uniform_layout.binding         = 0;
+    static_uniform_layout.descriptorCount = 1;
+
+    VkDescriptorSetLayoutBinding dynamic_uniform_layout = {};
+    dynamic_uniform_layout.descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+    dynamic_uniform_layout.stageFlags      = VK_SHADER_STAGE_VERTEX_BIT;
+    dynamic_uniform_layout.binding         = 1;
+    dynamic_uniform_layout.descriptorCount = 1;
+
     std::vector<VkDescriptorSetLayoutBinding> layout_bindings = 
     {
-        VkDescriptorSetLayoutBinding { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr },
-        VkDescriptorSetLayoutBinding { 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr }
+        static_uniform_layout,
+        dynamic_uniform_layout
     };
 
     VkDescriptorSetLayoutCreateInfo descriptor_layout_create_info = {};
