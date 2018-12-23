@@ -184,7 +184,7 @@ private:
     {
         glm::mat4 projection     = glm::mat4(1.f);
         glm::mat4 view           = glm::mat4(1.f);
-        glm::vec4 light_position = glm::vec4(1.25f, 8.35f, 0.0f, 0.0f);
+        glm::vec4 light_position = glm::vec4(0.f, -3.5f, 0.0f, 0.0f);
     } static_uniform_data;
 
     struct DynamicUniformData

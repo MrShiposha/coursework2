@@ -28,7 +28,8 @@ void main()
 	vec3 L = normalize(in_light_vec);
 	vec3 V = normalize(in_view_vec);
 	vec3 R = reflect(-L, N);
+	vec3 falme_color = vec3(226.f, 88.f, 34.f) * 0.05;
 	vec3 diffuse = max(dot(N, L), 0.0) * material.diffuse.rgb;
-	vec3 specular = pow(max(dot(R, V), 0.0), 16.0) * material.specular.rgb;
-	out_frag_color = vec4((material.ambient.rgb + diffuse) * color.rgb + specular, 1.f-material.opacity);
+	vec3 specular = pow(max(dot(R, V), 0.0), 16.0) * material.specular.rgb * falme_color;
+	out_frag_color = vec4((material.ambient.rgb + diffuse) * color.rgb + specular, 1.f/*-material.opacity*/);
 }

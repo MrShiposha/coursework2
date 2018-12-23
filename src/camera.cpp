@@ -18,6 +18,13 @@ znear(znear),
 zfar(zfar),
 perspective(glm::perspective(fov, aspect_ratio, znear, zfar))
 {
+    glm::mat4 clip(1.f);
+	clip[1][1] = -1;
+	// clip[2][2] = 0.5;
+	// clip[2][3] = 0.5;
+
+    perspective = clip * perspective;
+
     for(int i = 0; i < 4; ++i)
     {
         for(int j = 0; j < 4; ++j)

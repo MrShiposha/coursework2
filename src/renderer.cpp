@@ -1459,7 +1459,7 @@ void Renderer::on_mouse_move(int32_t x, int32_t y)
         float dy = last_mouse_position.y - static_cast<float>(y);
 
         std::cout << "rotation: " << dx << ", " << dy << std::endl;
-        controller.rotate(-dy, -dx);
+        controller.rotate(dy, -dx);
     }
 
     last_mouse_position.x = static_cast<float>(x);

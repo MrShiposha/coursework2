@@ -164,8 +164,8 @@ void load_materials
 
         scene->mMaterials[i]->Get(AI_MATKEY_OPACITY, materials[i].properties.opacity);
 
-        if(materials[i].properties.opacity > 0.f)
-            materials[i].properties.specular = glm::vec4(0.f);
+        // if(materials[i].properties.opacity > 0.f)
+            // materials[i].properties.specular = glm::vec4(0.f);
 
         VkFormat texture_format;
         std::string texture_format_suffix;

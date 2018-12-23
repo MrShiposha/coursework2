@@ -56,25 +56,15 @@ void setup_scene(Renderer &renderer, SceneGraph &scene)
 {
     auto mesh = StaticMesh::load_from_file
     (
-        "cat", 
-        "resources/obj/cat/cat.obj", 
-        renderer.get_device(),
-        renderer.get_command_pool(),
-        renderer.get_queue()
-    );
-
-    scene.add_node(mesh);
-
-    mesh = StaticMesh::load_from_file
-    (
         "tree", 
-        "resources/obj/tree/Tree.obj", 
+        "resources/obj/poleno/poleno.obj", 
         renderer.get_device(),
         renderer.get_command_pool(),
         renderer.get_queue()
     );
 
-    // mesh->translate(glm::vec3(2.f, 0.f, 0.f));
+    mesh->scale(glm::vec3(0.5f, 0.5f, 0.5f));
+    mesh->translate(glm::vec3(0.f, -1.f, 0.f));
 
     scene.add_node(mesh);
 }
