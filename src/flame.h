@@ -12,6 +12,7 @@ class Flame : public Actor
 public:
     Flame
     (
+        std::string_view id,
         size_t particle_count,
         double flame_radius,
         double alpha_damping,
@@ -27,6 +28,10 @@ public:
 
     const std::vector<Particle> &get_particles() const;
 
+    std::shared_ptr<Texture2D> get_texture() const;
+
+    VkDescriptorSet &get_texture_descriptor_set();
+
 private:
     void initialize_particle(Particle &particle);
 
@@ -40,6 +45,7 @@ private:
     glm::vec3 max_velocity;
 
     std::shared_ptr<Texture2D> texture;
+    VkDescriptorSet texture_descriptor_set;
 };
 
 #endif // CG_SEM5_FLAME_H

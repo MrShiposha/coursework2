@@ -8,6 +8,7 @@
 #include "renderer.h"
 #include "camera.h"
 #include "staticmesh.h"
+#include "flame.h"
 
 void setup_scene(Renderer &renderer, SceneGraph &);
 
@@ -67,4 +68,29 @@ void setup_scene(Renderer &renderer, SceneGraph &scene)
     mesh->translate(glm::vec3(0.f, -1.f, 0.f));
 
     scene.add_node(mesh);
+
+
+    static const char *flame_texture = "resources/textures/particle_fire.ktx";
+    auto flame = std::make_shared<Flame>
+    (
+        "center flame",
+        512,
+        8.f,
+        2.5f,
+        0.5f,
+        2.f,
+        glm::vec3(0.f, 0.f, 0.f),
+        glm::vec3(-3.f, 0.5, -3.f),
+        glm::vec3(3.f, 7.5f, 3.f),
+        Texture2D::load_from_file
+        (
+            flame_texture,
+            VK_FORMAT_R8G8B8A8_UNORM,
+            renderer.get_device(),
+            renderer.get_command_pool(),
+            renderer.get_queue()
+        )
+    );
+
+    scene.add_node(flame);
 }

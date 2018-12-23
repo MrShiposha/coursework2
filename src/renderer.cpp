@@ -8,6 +8,7 @@
 #include "renderer.h"
 #include "vkassert.h"
 #include "staticmesh.h"
+#include "flame.h"
 
 void *aligned_allocate(size_t size, size_t alignment)
 {
@@ -95,6 +96,7 @@ descriptor_set_layouts
 scene_descriptor_set(VK_NULL_HANDLE),
 vertex_buffer(std::make_shared<DeviceBuffer>()),
 index_buffer(std::make_shared<DeviceBuffer>()),
+particle_buffer(std::make_shared<DeviceBuffer>()),
 uniform_buffers
 ({
     std::make_shared<DeviceBuffer>(),
@@ -103,10 +105,7 @@ uniform_buffers
 dynamic_uniform_alignment(0),
 static_uniform_data(),
 dynamic_uniform_data(),
-vertex_info
-({
-    {}
-}),
+vertex_info({}),
 shader_stages(),
 pipeline_layouts
 ({
@@ -116,6 +115,9 @@ pipelines
 ({
     VK_NULL_HANDLE
 }),
+actors_container(),
+static_meshes_container(),
+camera_selector(),
 controller(3.5f, 0.5f, glm::vec3(0.0f, 0.f, -3.0f), glm::vec3(0.0f, 0.0f, 0.0f)),
 last_mouse_position(0.f),
 is_rotation_active(false)
@@ -184,14 +186,21 @@ void Renderer::render()
     auto time_diff = duration_cast<milliseconds>(time_end - time_start).count();
     frame_timer = static_cast<double>(time_diff) / 1000.0;
 
-    // TODO: Update actor controller
     controller.update(frame_timer);
     
     update_dynamic_uniform();
     update_static_uniform();
 
     for(auto &&actor : actors_container.get_actors())
+    {
+        if(auto flame = std::dynamic_pointer_cast<Flame>(actor))
+        {
+            flame->update(frame_timer * 0.45f);
+            update_particles();
+        }
+
         actor->mark_unchanged();
+    }
 
     timer += timer_speed * frame_timer;
     if(timer > 1.0)
@@ -575,23 +584,24 @@ void Renderer::create_pipeline_cache()
 
 void Renderer::prepare(SceneGraph &scenegraph)
 {
+    scenegraph.accept_down(actors_container);
+    scenegraph.accept_down(static_meshes_container);
+    scenegraph.accept_down(camera_selector);
+
     create_static_mesh_vertex_descriptions();
+    create_flame_vertex_descriptions();
 
     {
-        scenegraph.accept_down(static_meshes);
         setup_descriptor_pool();
     }
 
     {
         setup_scene_descriptor_set_layout();
-        setup_materials_descriptor_set_layout();
+        setup_texture_sampler_descriptor_set_layout();
         setup_static_mesh_pipeline_layout();
     }
 
     {
-        scenegraph.accept_down(actors_container);
-        scenegraph.accept_down(camera_selector);
-    
         setup_uniform_buffers();
         setup_scene_descriptors();
     }
@@ -599,6 +609,9 @@ void Renderer::prepare(SceneGraph &scenegraph)
     {
         setup_materials_descriptors();
         setup_static_mesh_buffer();
+
+        setup_particle_texture_descriptors();
+        setup_particle_buffer();
     }
 
     create_pipelines();
@@ -723,11 +736,10 @@ void Renderer::free_debugging()
 
 void Renderer::create_static_mesh_vertex_descriptions()
 {
-
     vertex_info.static_mesh.binding_descriptions.resize(1);
 
     VkVertexInputBindingDescription input_binding_description = {};
-    input_binding_description.binding   = STATIC_MESH_BUFFER_ID;
+    input_binding_description.binding   = VERTEX_BUFFER_ID;
     input_binding_description.stride    = sizeof(StaticMesh::Vertex);
     input_binding_description.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
     vertex_info.static_mesh.binding_descriptions[0] = input_binding_description;
@@ -737,28 +749,28 @@ void Renderer::create_static_mesh_vertex_descriptions()
 
     // Position (loc = 0)
     attribute_description.location = 0;
-    attribute_description.binding  = STATIC_MESH_BUFFER_ID;
+    attribute_description.binding  = VERTEX_BUFFER_ID;
     attribute_description.format   = VK_FORMAT_R32G32B32_SFLOAT;
     attribute_description.offset   = 0;
     vertex_info.static_mesh.attribute_descriptions[0] = attribute_description;
 
     // Normal (loc = 1)
     attribute_description.location = 1;
-    attribute_description.binding  = STATIC_MESH_BUFFER_ID;
+    attribute_description.binding  = VERTEX_BUFFER_ID;
     attribute_description.format   = VK_FORMAT_R32G32B32_SFLOAT;
     attribute_description.offset   = sizeof(float) * 3;
     vertex_info.static_mesh.attribute_descriptions[1] = attribute_description;
 
     // UV (loc = 2)
     attribute_description.location = 2;
-    attribute_description.binding  = STATIC_MESH_BUFFER_ID;
+    attribute_description.binding  = VERTEX_BUFFER_ID;
     attribute_description.format   = VK_FORMAT_R32G32_SFLOAT;
     attribute_description.offset   = sizeof(float) * 6;
     vertex_info.static_mesh.attribute_descriptions[2] = attribute_description;
 
     // Color (loc = 3)
     attribute_description.location = 3;
-    attribute_description.binding  = STATIC_MESH_BUFFER_ID;
+    attribute_description.binding  = VERTEX_BUFFER_ID;
     attribute_description.format   = VK_FORMAT_R32G32B32_SFLOAT;
     attribute_description.offset   = sizeof(float) * 8;
     vertex_info.static_mesh.attribute_descriptions[3] = attribute_description;
@@ -769,6 +781,62 @@ void Renderer::create_static_mesh_vertex_descriptions()
     vertex_info.static_mesh.input_state.pVertexBindingDescriptions      = vertex_info.static_mesh.binding_descriptions.data();
     vertex_info.static_mesh.input_state.vertexAttributeDescriptionCount = static_cast<uint32_t>(vertex_info.static_mesh.attribute_descriptions.size());
     vertex_info.static_mesh.input_state.pVertexAttributeDescriptions    = vertex_info.static_mesh.attribute_descriptions.data();
+}
+
+void Renderer::create_flame_vertex_descriptions()
+{
+    vertex_info.flame.binding_descriptions.resize(1);
+
+    VkVertexInputBindingDescription input_binding_description = {};
+    input_binding_description.binding   = VERTEX_BUFFER_ID;
+    input_binding_description.stride    = sizeof(Particle);
+    input_binding_description.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+    vertex_info.flame.binding_descriptions[0] = input_binding_description;
+
+    VkVertexInputAttributeDescription attribute_description = {};
+    vertex_info.flame.attribute_descriptions.resize(5);
+
+    // Position (loc = 0)
+    attribute_description.location = 0;
+    attribute_description.binding  = VERTEX_BUFFER_ID;
+    attribute_description.format   = VK_FORMAT_R32G32B32A32_SFLOAT;
+    attribute_description.offset   = 0;
+    vertex_info.flame.attribute_descriptions[0] = attribute_description;
+
+    // Color (loc = 1)
+    attribute_description.location = 1;
+    attribute_description.binding  = VERTEX_BUFFER_ID;
+    attribute_description.format   = VK_FORMAT_R32G32B32A32_SFLOAT;
+    attribute_description.offset   = sizeof(float) * 4;
+    vertex_info.flame.attribute_descriptions[1] = attribute_description;
+
+    // Alpha (loc = 2)
+    attribute_description.location = 2;
+    attribute_description.binding  = VERTEX_BUFFER_ID;
+    attribute_description.format   = VK_FORMAT_R32_SFLOAT;
+    attribute_description.offset   = sizeof(float) * 8;
+    vertex_info.flame.attribute_descriptions[2] = attribute_description;
+
+    // Size (loc = 3)
+    attribute_description.location = 3;
+    attribute_description.binding  = VERTEX_BUFFER_ID;
+    attribute_description.format   = VK_FORMAT_R32_SFLOAT;
+    attribute_description.offset   = sizeof(float) * 9;
+    vertex_info.flame.attribute_descriptions[3] = attribute_description;
+
+    // Rotation (loc = 4)
+    attribute_description.location = 4;
+    attribute_description.binding  = VERTEX_BUFFER_ID;
+    attribute_description.format   = VK_FORMAT_R32_SFLOAT;
+    attribute_description.offset   = sizeof(float) * 10;
+    vertex_info.flame.attribute_descriptions[4] = attribute_description;
+
+    vertex_info.flame.input_state = {};
+    vertex_info.flame.input_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertex_info.flame.input_state.vertexBindingDescriptionCount   = static_cast<uint32_t>(vertex_info.flame.binding_descriptions.size());
+    vertex_info.flame.input_state.pVertexBindingDescriptions      = vertex_info.flame.binding_descriptions.data();
+    vertex_info.flame.input_state.vertexAttributeDescriptionCount = static_cast<uint32_t>(vertex_info.flame.attribute_descriptions.size());
+    vertex_info.flame.input_state.pVertexAttributeDescriptions    = vertex_info.flame.attribute_descriptions.data();
 }
 
 void Renderer::create_pipelines()
@@ -834,7 +902,7 @@ void Renderer::create_pipelines()
 
     VkGraphicsPipelineCreateInfo pipeline_create_info = {};
     pipeline_create_info.sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-    pipeline_create_info.layout              = pipeline_layouts.static_mesh;
+    pipeline_create_info.layout              = pipeline_layouts.default_layout;
     pipeline_create_info.renderPass          = renderpass;
     pipeline_create_info.flags               = 0;
     pipeline_create_info.basePipelineIndex   = -1;
@@ -860,6 +928,41 @@ void Renderer::create_pipelines()
     (
         vkCreateGraphicsPipelines(*device, pipeline_cache, 1, &pipeline_create_info, nullptr, &pipelines.static_mesh),
         "Can't create graphics pipeline for static meshes"
+    );
+
+
+    // Flame
+    assembly_create_info.topology               = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
+
+    rasterization_create_info.polygonMode      = VK_POLYGON_MODE_FILL;
+    rasterization_create_info.cullMode         = VK_CULL_MODE_BACK_BIT;
+    rasterization_create_info.frontFace        = VK_FRONT_FACE_CLOCKWISE;
+
+    shader_stages[0] = device->load_shader("resources/shaders/flame.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
+    shader_stages[1] = device->load_shader("resources/shaders/flame.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
+
+    // Do not use depth buffer on flame
+    depth_stencil_create_info.depthWriteEnable = VK_FALSE;
+    
+    // Premulitplied alpha
+    blend_attachment_state.blendEnable         = VK_TRUE;
+    blend_attachment_state.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+    blend_attachment_state.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    blend_attachment_state.colorBlendOp        = VK_BLEND_OP_ADD;
+    blend_attachment_state.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    blend_attachment_state.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+    blend_attachment_state.alphaBlendOp        = VK_BLEND_OP_ADD;
+    blend_attachment_state.colorWriteMask      = VK_COLOR_COMPONENT_R_BIT 
+                                               | VK_COLOR_COMPONENT_G_BIT 
+                                               | VK_COLOR_COMPONENT_B_BIT
+                                               | VK_COLOR_COMPONENT_A_BIT;
+
+    pipeline_create_info.pVertexInputState   = &vertex_info.flame.input_state;
+    
+    vk_assert
+    (
+        vkCreateGraphicsPipelines(*device, pipeline_cache, 1, &pipeline_create_info, nullptr, &pipelines.flame),
+        "Can't create flame pipeline"
     );
 }
 
@@ -913,7 +1016,7 @@ void Renderer::fill_command_buffers()
         if(vertex_buffer->size != 0 && index_buffer->size != 0)
         {
             VkDeviceSize offsets[1] = { 0 };
-            vkCmdBindVertexBuffers(draw_command_buffers[i], STATIC_MESH_BUFFER_ID, 1, &vertex_buffer->buffer, offsets);
+            vkCmdBindVertexBuffers(draw_command_buffers[i], VERTEX_BUFFER_ID, 1, &vertex_buffer->buffer, offsets);
             vkCmdBindIndexBuffer(draw_command_buffers[i], index_buffer->buffer, 0, VK_INDEX_TYPE_UINT32);
         }
 
@@ -936,12 +1039,44 @@ void Renderer::fill_command_buffers()
                     vkCmdBindPipeline(draw_command_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.static_mesh);
 
                     uint32_t dynamic_offset = static_cast<uint32_t>(model_matrix_index) * static_cast<uint32_t>(dynamic_uniform_alignment);
-                    vkCmdBindDescriptorSets(draw_command_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layouts.static_mesh, 0, static_cast<uint32_t>(descriptor_sets.size()), descriptor_sets.data(), 1, &dynamic_offset);
+                    vkCmdBindDescriptorSets(draw_command_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layouts.default_layout, 0, static_cast<uint32_t>(descriptor_sets.size()), descriptor_sets.data(), 1, &dynamic_offset);
 
-                    vkCmdPushConstants(draw_command_buffers[i], pipeline_layouts.static_mesh, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(StaticMesh::MaterialProperties), &materials[j].properties);
+                    vkCmdPushConstants(draw_command_buffers[i], pipeline_layouts.default_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(StaticMesh::MaterialProperties), &materials[j].properties);
 
                     vkCmdDrawIndexed(draw_command_buffers[i], parts[j].index_count, 1, 0, parts[j].index_base, 0);
                 }
+            }
+
+            ++model_matrix_index;
+        }
+        /////////////////////
+
+
+        // Draw flames
+        /////////////////////
+        vkCmdBindPipeline(draw_command_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.flame);
+
+
+        if(particle_buffer->size != 0)
+        {
+            VkDeviceSize offsets[1] = { 0 };
+            vkCmdBindVertexBuffers(draw_command_buffers[i], VERTEX_BUFFER_ID, 1, &particle_buffer->buffer, offsets);
+        }
+
+        model_matrix_index = 0;
+        size_t first_vertex = 0;
+        for(auto &&actor : actors)
+        {
+            if(auto flame = std::dynamic_pointer_cast<Flame>(actor))
+            {
+                descriptor_sets[1] = flame->get_texture_descriptor_set();
+
+                uint32_t dynamic_offset = static_cast<uint32_t>(model_matrix_index) * static_cast<uint32_t>(dynamic_uniform_alignment);
+
+                vkCmdBindDescriptorSets(draw_command_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layouts.default_layout, 0, static_cast<uint32_t>(descriptor_sets.size()), descriptor_sets.data(), 1, &dynamic_offset);
+                vkCmdDraw(draw_command_buffers[i], flame->get_particles().size(), 1, first_vertex, 0);
+
+                first_vertex += flame->get_particles().size();
             }
 
             ++model_matrix_index;
@@ -963,7 +1098,7 @@ void Renderer::setup_static_mesh_pipeline_layout()
     std::array<VkDescriptorSetLayout, 2> layouts = 
     {
         descriptor_set_layouts.scene,
-        descriptor_set_layouts.static_mesh_material
+        descriptor_set_layouts.texture_sampler
     };
 
     // Use push constants to pass material properties to the fragment shader
@@ -981,7 +1116,7 @@ void Renderer::setup_static_mesh_pipeline_layout()
 
     vk_assert
     (
-        vkCreatePipelineLayout(*device, &layout_create_info, nullptr, &pipeline_layouts.static_mesh),
+        vkCreatePipelineLayout(*device, &layout_create_info, nullptr, &pipeline_layouts.default_layout),
         "Can't create pipeline layout for static mesh"
     );
 }
@@ -1028,7 +1163,7 @@ void Renderer::setup_scene_descriptors()
 
 void Renderer::setup_materials_descriptors()
 {
-    auto &meshes = static_meshes.get_meshes();
+    auto &meshes = static_meshes_container.get_meshes();
     for(auto &&mesh : meshes)
     {
         auto &materials = mesh->get_materials();
@@ -1037,7 +1172,7 @@ void Renderer::setup_materials_descriptors()
             VkDescriptorSetAllocateInfo allocate_info = {};
             allocate_info.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
             allocate_info.descriptorPool     = descriptor_pool;
-            allocate_info.pSetLayouts        = &descriptor_set_layouts.static_mesh_material;
+            allocate_info.pSetLayouts        = &descriptor_set_layouts.texture_sampler;
             allocate_info.descriptorSetCount = 1;
 
             vk_assert
@@ -1063,9 +1198,44 @@ void Renderer::setup_materials_descriptors()
     }
 }
 
+void Renderer::setup_particle_texture_descriptors()
+{
+    for(auto &&actor : actors_container.get_actors())
+    {
+        if(auto flame = std::dynamic_pointer_cast<Flame>(actor))
+        {
+            VkDescriptorSetAllocateInfo allocate_info = {};
+            allocate_info.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+            allocate_info.descriptorPool     = descriptor_pool;
+            allocate_info.pSetLayouts        = &descriptor_set_layouts.texture_sampler;
+            allocate_info.descriptorSetCount = 1;
+
+            vk_assert
+            (
+                vkAllocateDescriptorSets(*device, &allocate_info, &flame->get_texture_descriptor_set()),
+                "Can't allocate descriptor sets for flames"
+            );
+
+            VkWriteDescriptorSet write_descriptor = {};
+            write_descriptor.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            write_descriptor.dstSet          = flame->get_texture_descriptor_set();
+            write_descriptor.descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            write_descriptor.dstBinding      = 0;
+            write_descriptor.pImageInfo      = &flame->get_texture()->descriptor;
+            write_descriptor.descriptorCount = 1;
+            std::vector<VkWriteDescriptorSet> write_descriptors = 
+            {
+                write_descriptor
+            };
+
+            vkUpdateDescriptorSets(*device, static_cast<uint32_t>(write_descriptors.size()), write_descriptors.data(), 0, nullptr);
+        }
+    }
+}
+
 void Renderer::setup_static_mesh_buffer()
 {
-    auto &meshes = static_meshes.get_meshes();
+    auto &meshes = static_meshes_container.get_meshes();
     std::vector<StaticMesh::Vertex> vertices;
     std::vector<MeshElementIndex> indices;
 
@@ -1191,8 +1361,32 @@ void Renderer::setup_static_mesh_buffer()
         vkQueueWaitIdle(queue),
         "Can't wait copy queue"
     );
+}
 
-    // TODO: fence
+void Renderer::setup_particle_buffer()
+{
+    size_t particle_buffer_size = 0;
+    for(auto &&actor : actors_container.get_actors())
+        if(auto flame = std::dynamic_pointer_cast<Flame>(actor))
+            particle_buffer_size += sizeof(Particle) * flame->get_particles().size();
+
+    vk_assert
+    (
+        device->create_buffer
+        (
+            VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, 
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
+            particle_buffer, 
+            particle_buffer_size
+        ),
+        "Can't create staging buffer for static mesh vertices"
+    );
+
+    vk_assert
+    (
+        particle_buffer->map(),
+        "Can't map memory on particle buffer"
+    );
 }
 
 void Renderer::setup_uniform_buffers()
@@ -1259,6 +1453,7 @@ void Renderer::update_static_uniform()
 
     static_uniform_data.projection = camera->get_perspective_matrix();
     static_uniform_data.view       = camera->get_model_matrix();
+    static_uniform_data.viewport_dimension = glm::vec2(static_cast<float>(width), static_cast<float>(height));
 
     std::memcpy(uniform_buffers.static_uniform->mapped_memory, &static_uniform_data, sizeof(static_uniform_data));
 }
@@ -1294,6 +1489,30 @@ void Renderer::update_dynamic_uniform()
     );
 }
 
+void Renderer::update_particles()
+{
+    size_t transfer_size = 0;
+    size_t base_index = 0;
+
+    for(auto &&actor : actors_container.get_actors())
+    {
+        if(auto flame = std::dynamic_pointer_cast<Flame>(actor))
+        {
+            auto &particles = flame->get_particles();
+            transfer_size = sizeof(Particle) * particles.size();
+
+            std::memcpy
+            (
+                static_cast<Particle*>(particle_buffer->mapped_memory) + base_index,
+                particles.data(),
+                transfer_size
+            );
+
+            base_index += particles.size();
+        }
+    }
+}
+
 void Renderer::setup_descriptor_pool()
 {
     std::vector<VkDescriptorPoolSize> pool_sizes = 
@@ -1303,8 +1522,13 @@ void Renderer::setup_descriptor_pool()
     };
 
     uint32_t samplers_count = 0;
-    for(auto &&mesh : static_meshes.get_meshes())
-        samplers_count += mesh->get_materials().size();
+    for(auto &&actor : actors_container.get_actors())
+    {
+        if(auto mesh = std::dynamic_pointer_cast<StaticMesh>(actor))
+            samplers_count += mesh->get_materials().size();
+        else if(auto flame = std::dynamic_pointer_cast<Flame>(actor))
+            ++samplers_count; // Flame uses only one texture
+    }
 
     if(samplers_count > 0)
         pool_sizes.push_back(VkDescriptorPoolSize { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, samplers_count });
@@ -1354,7 +1578,7 @@ void Renderer::setup_scene_descriptor_set_layout()
     );
 }
 
-void Renderer::setup_materials_descriptor_set_layout()
+void Renderer::setup_texture_sampler_descriptor_set_layout()
 {
     std::vector<VkDescriptorSetLayoutBinding> layout_bindings = 
     {
@@ -1368,7 +1592,7 @@ void Renderer::setup_materials_descriptor_set_layout()
 
     vk_assert
     (
-        vkCreateDescriptorSetLayout(*device, &descriptor_layout_create_info, nullptr, &descriptor_set_layouts.static_mesh_material),
+        vkCreateDescriptorSetLayout(*device, &descriptor_layout_create_info, nullptr, &descriptor_set_layouts.texture_sampler),
         "Can't create descriptor set layout for static mesh materials"
     );
 }

@@ -63,18 +63,21 @@ public:
     void free_debugging();
 
     void create_static_mesh_vertex_descriptions();
+    void create_flame_vertex_descriptions();
     void create_pipelines();
     void fill_command_buffers();
 
     void setup_descriptor_pool();
     void setup_scene_descriptor_set_layout();
-    void setup_materials_descriptor_set_layout();
+    void setup_texture_sampler_descriptor_set_layout();
     void setup_static_mesh_pipeline_layout();
 
     void setup_scene_descriptors();
     void setup_materials_descriptors();
+    void setup_particle_texture_descriptors();
 
     void setup_static_mesh_buffer();
+    void setup_particle_buffer();
 
     void setup_uniform_buffers();
 
@@ -82,6 +85,7 @@ public:
 
     void update_static_uniform();
     void update_dynamic_uniform();
+    void update_particles();
 
     void destroy_command_buffers();
 
@@ -163,7 +167,7 @@ private:
 
     struct 
     {
-        VkDescriptorSetLayout static_mesh_material;
+        VkDescriptorSetLayout texture_sampler;
         VkDescriptorSetLayout scene;
     } descriptor_set_layouts;
 
@@ -171,6 +175,7 @@ private:
 
     std::shared_ptr<DeviceBuffer> vertex_buffer;
     std::shared_ptr<DeviceBuffer> index_buffer;
+    std::shared_ptr<DeviceBuffer> particle_buffer;
 
     struct 
     {
@@ -182,9 +187,10 @@ private:
 
     struct StaticUniformData
     {
-        glm::mat4 projection     = glm::mat4(1.f);
-        glm::mat4 view           = glm::mat4(1.f);
-        glm::vec4 light_position = glm::vec4(0.f, -3.5f, 0.0f, 0.0f);
+        glm::mat4 projection         = glm::mat4(1.f);
+        glm::mat4 view               = glm::mat4(1.f);
+        glm::vec4 light_position     = glm::vec4(0.f, -3.5f, 0.0f, 0.0f);
+        glm::vec2 viewport_dimension = glm::vec2(0.f);
     } static_uniform_data;
 
     struct DynamicUniformData
@@ -192,7 +198,7 @@ private:
         glm::mat4 *models = nullptr;
     } dynamic_uniform_data;
 
-    static constexpr uint32_t STATIC_MESH_BUFFER_ID = 0;
+    static constexpr uint32_t VERTEX_BUFFER_ID = 0;
 
     struct 
     {
@@ -202,22 +208,30 @@ private:
             std::vector<VkVertexInputBindingDescription>   binding_descriptions;
             std::vector<VkVertexInputAttributeDescription> attribute_descriptions;
         } static_mesh;
+
+        struct
+        {
+            VkPipelineVertexInputStateCreateInfo           input_state;
+            std::vector<VkVertexInputBindingDescription>   binding_descriptions;
+            std::vector<VkVertexInputAttributeDescription> attribute_descriptions;
+        } flame;
     } vertex_info;
 
     std::array<VkPipelineShaderStageCreateInfo, 2> shader_stages;
 
     struct
     {
-        VkPipelineLayout static_mesh;
+        VkPipelineLayout default_layout;
     } pipeline_layouts;
 
     struct 
     {
         VkPipeline static_mesh;
+        VkPipeline flame;
     } pipelines;
 
     ActorsContainer actors_container;
-    StaticMeshesContainer static_meshes;
+    StaticMeshesContainer static_meshes_container;
     CameraSelector camera_selector;
 
     ActorController controller;

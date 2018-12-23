@@ -13,6 +13,7 @@ layout (set = 0, binding = 0) uniform StaticUniformBuffer
 	mat4 projection;
 	mat4 view;
 	vec4 light_position;
+	vec2 viewport_dimension;
 } static_uniform;
 
 layout (set = 0, binding = 1) uniform DynamicUniformBuffer

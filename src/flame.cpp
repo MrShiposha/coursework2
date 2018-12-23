@@ -1,5 +1,6 @@
 #include <cmath>
 #include <random>
+#include <iostream>
 
 #include "flame.h"
 
@@ -12,6 +13,7 @@ float rnd(float range)
 
 Flame::Flame
 (
+    std::string_view id,
     size_t particle_count,
     double flame_radius,
     double alpha_damping,
@@ -21,14 +23,16 @@ Flame::Flame
     const glm::vec3 &min_velocity,
     const glm::vec3 &max_velocity,
     std::shared_ptr<Texture2D> texture
-) : particles(particle_count), flame_radius(flame_radius), 
+) : Actor(id),
+particles(particle_count), flame_radius(flame_radius), 
 alpha_damping(alpha_damping), 
 size_damping(size_damping),
 alpha_threshold(alpha_threshold),
 emitter_position(emitter_position),
 min_velocity(min_velocity),
 max_velocity(max_velocity),
-texture(texture)
+texture(texture),
+texture_descriptor_set(VK_NULL_HANDLE)
 {
     for (auto &&particle : particles)
     {
@@ -39,6 +43,7 @@ texture(texture)
 
 void Flame::update(float delta_time)
 {
+    std::cout << ">>> Update particles of flame \"" << this->id << "\" <<<" << std::endl;
     for(auto &&particle : particles)
     {
         particle.position.y -= particle.velocity.y * delta_time * 3.5f;
@@ -49,9 +54,12 @@ void Flame::update(float delta_time)
 
         if(particle.alpha > alpha_threshold)
             initialize_particle(particle);
+
+        std::cout << "particle position: " << particle.position.x << ' ' << particle.position.y << ' ' << particle.position.z << std::endl;
     }
 
     this->mark_changed();
+    std::cout << "### FINISHED \"" << this->id << "\" ###" << std::endl;
 }
 
 const std::vector<Particle> &Flame::get_particles() const
@@ -77,4 +85,14 @@ void Flame::initialize_particle(Particle &particle)
     particle.position.z = r * sin(theta) * cos(phi);
 
     particle.position += glm::vec4(emitter_position, 0.0f);
+}
+
+std::shared_ptr<Texture2D> Flame::get_texture() const
+{
+    return texture;
+}
+
+VkDescriptorSet &Flame::get_texture_descriptor_set()
+{
+    return texture_descriptor_set;
 }
