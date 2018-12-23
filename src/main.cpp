@@ -70,27 +70,68 @@ void setup_scene(Renderer &renderer, SceneGraph &scene)
     scene.add_node(mesh);
 
 
-    static const char *flame_texture = "resources/textures/particle_fire.ktx";
+    auto flame_texture = Texture2D::load_from_file
+    (
+        "resources/textures/flame_particle.ktx",
+        VK_FORMAT_R8G8B8A8_UNORM,
+        renderer.get_device(),
+        renderer.get_command_pool(),
+        renderer.get_queue()
+    );
+
     auto flame = std::make_shared<Flame>
     (
         "center flame",
-        512,
-        8.f,
-        2.5f,
-        0.5f,
-        2.f,
-        glm::vec3(0.f, 0.f, 0.f),
-        glm::vec3(-3.f, 0.5, -3.f),
-        glm::vec3(3.f, 7.5f, 3.f),
-        Texture2D::load_from_file
-        (
-            flame_texture,
-            VK_FORMAT_R8G8B8A8_UNORM,
-            renderer.get_device(),
-            renderer.get_command_pool(),
-            renderer.get_queue()
-        )
+        128,  // particle count
+        4.4f,  // radius
+        3.5f, // alpha damping
+        1.f,  // size damping
+        2.f,  // alpha threshold
+        glm::vec3(0.f, 3.5f, 0.f),   // emitter position
+        glm::vec3(-3.f, 0.5f, -3.f), // min velocity
+        glm::vec3(3.f, 4.5f, 3.f),   // max velocity
+        flame_texture
     );
+
+    flame->scale(glm::vec3(0.2f, 0.2f, 0.2f));
+
+    scene.add_node(flame);
+
+
+    flame = std::make_shared<Flame>
+    (
+        "left flame",
+        256, // particle count
+        2.5f, // radius
+        2.f, // alpha damping
+        1.f, // size damping
+        2.f, // alpha threshold
+        glm::vec3(-13.0f, -1.f, 3.f),   // emitter position
+        glm::vec3(-3.f, 0.5f, -3.f), // min velocity
+        glm::vec3(3.f, 4.5f, 3.f),   // max velocity
+        flame_texture
+    );
+
+    flame->scale(glm::vec3(0.2f, 0.2f, 0.2f));
+
+    scene.add_node(flame);
+
+
+    flame = std::make_shared<Flame>
+    (
+        "right flame",
+        256, // particle count
+        1.f, // radius
+        2.f, // alpha damping
+        2.f, // size damping
+        2.f, // alpha threshold
+        glm::vec3(8.3f, 1.f, -1.f),   // emitter position
+        glm::vec3(-3.f, 1.5f, -3.f), // min velocity
+        glm::vec3(3.f, 7.5f, 3.f),   // max velocity
+        flame_texture
+    );
+
+    flame->scale(glm::vec3(0.2f, 0.2f, 0.2f));
 
     scene.add_node(flame);
 }

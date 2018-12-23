@@ -6,8 +6,8 @@
 #import "vulkanview.h"
 #import "windowdelegate.h"
 
-constexpr float DEFAULT_WIDTH  = 640;
-constexpr float DEFAULT_HEIGHT = 420;
+constexpr float DEFAULT_WIDTH  = 1024;
+constexpr float DEFAULT_HEIGHT = 768;
 
 Window::Window()
 : handle

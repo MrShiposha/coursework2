@@ -44,8 +44,8 @@ void main ()
 	float spriteSize = 8.0 * in_size;
 
 	// Scale particle size depending on camera projection
-	vec4 eyePos = dynamic_uniform.model * vec4(in_position.xyz, 1.0);
-	vec4 projectedCorner = static_uniform.projection * vec4(0.5 * spriteSize, 0.5 * spriteSize, eyePos.z, eyePos.w);
-	// gl_PointSize = static_uniform.viewport_dimension.x * projectedCorner.x / projectedCorner.w;
+	vec4 eyePos = static_uniform.view * dynamic_uniform.model * vec4(in_position.xyz, 1.0);
+	vec4 projectedCorner = static_uniform.projection * vec4(0.025 * spriteSize, 0.025 * spriteSize, eyePos.z, eyePos.w);
+	gl_PointSize = static_uniform.viewport_dimension.x * projectedCorner.x / projectedCorner.w;
 	
 }

@@ -46,7 +46,7 @@ void Flame::update(float delta_time)
     std::cout << ">>> Update particles of flame \"" << this->id << "\" <<<" << std::endl;
     for(auto &&particle : particles)
     {
-        particle.position.y -= particle.velocity.y * delta_time * 3.5f;
+        particle.position.y += particle.velocity.y * delta_time * 3.5f;
         particle.alpha      += delta_time * alpha_damping;
         particle.size       -= delta_time * size_damping;
 
