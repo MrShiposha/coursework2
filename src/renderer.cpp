@@ -116,7 +116,7 @@ pipelines
 ({
     VK_NULL_HANDLE
 }),
-controller(7.5f, 0.5f),
+controller(3.5f, 0.5f, glm::vec3(0.0f, 0.f, -3.0f), glm::vec3(0.0f, 0.0f, 0.0f)),
 last_mouse_position(0.f),
 is_rotation_active(false)
 {
@@ -1302,7 +1302,10 @@ void Renderer::setup_descriptor_pool()
         VkDescriptorPoolSize { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1 }
     };
 
-    uint32_t samplers_count = static_cast<uint32_t>(static_meshes.get_meshes().size());
+    uint32_t samplers_count = 0;
+    for(auto &&mesh : static_meshes.get_meshes())
+        samplers_count += mesh->get_materials().size();
+
     if(samplers_count > 0)
         pool_sizes.push_back(VkDescriptorPoolSize { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, samplers_count });
 
@@ -1404,13 +1407,13 @@ void Renderer::on_key(const Key &key)
             int movement = ActorController::Movement::NO;
 
             if(key.code == 'w')
-                movement |= ActorController::Movement::FORWARD;
-            if(key.code == 'a')
-                movement |= ActorController::Movement::LEFT;
-            if(key.code == 's')
-                movement |= ActorController::Movement::BACKWARD;
-            if(key.code == 'd')
-                movement |= ActorController::Movement::RIGHT;
+                movement = ActorController::Movement::FORWARD;
+            else if(key.code == 'a')
+                movement = ActorController::Movement::LEFT;
+            else if(key.code == 's')
+                movement = ActorController::Movement::BACKWARD;
+            else if(key.code == 'd')
+                movement = ActorController::Movement::RIGHT;
             
             controller.set_movement(static_cast<ActorController::Movement>(movement));
         }
@@ -1456,7 +1459,7 @@ void Renderer::on_mouse_move(int32_t x, int32_t y)
         float dy = last_mouse_position.y - static_cast<float>(y);
 
         std::cout << "rotation: " << dx << ", " << dy << std::endl;
-        controller.rotate(dx, dy);
+        controller.rotate(-dy, -dx);
     }
 
     last_mouse_position.x = static_cast<float>(x);

@@ -30,7 +30,7 @@ int main() try
         256.f
     );
 
-    camera->translate(glm::vec3(0.0, -0.5f, -1.15f));
+    // camera->translate(glm::vec3(0.0, -0.5f, -1.15f));
 
     scenegraph.add_node(camera);
 
@@ -62,6 +62,19 @@ void setup_scene(Renderer &renderer, SceneGraph &scene)
         renderer.get_command_pool(),
         renderer.get_queue()
     );
+
+    scene.add_node(mesh);
+
+    mesh = StaticMesh::load_from_file
+    (
+        "tree", 
+        "resources/obj/tree/Tree.obj", 
+        renderer.get_device(),
+        renderer.get_command_pool(),
+        renderer.get_queue()
+    );
+
+    // mesh->translate(glm::vec3(2.f, 0.f, 0.f));
 
     scene.add_node(mesh);
 }

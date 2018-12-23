@@ -1,12 +1,13 @@
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtc/matrix_transform.hpp>
+#include <iostream>
 
 #include "camera.h"
 
 static size_t default_camera_id = 0;
 
 Camera::Camera(float fov, float aspect_ratio, float znear, float zfar)
-: Camera("camera" + std::to_string(default_camera_id++), fov, aspect_ratio, znear, zfar)
+: Camera("camera" + std::to_string(default_camera_id++), glm::radians(fov), aspect_ratio, znear, zfar)
 {}
 
 Camera::Camera(std::string_view id, float fov, float aspect_ratio, float znear, float zfar)
@@ -16,7 +17,14 @@ aspect_ratio(aspect_ratio),
 znear(znear),
 zfar(zfar),
 perspective(glm::perspective(fov, aspect_ratio, znear, zfar))
-{}
+{
+    for(int i = 0; i < 4; ++i)
+    {
+        for(int j = 0; j < 4; ++j)
+            std::cout << perspective[i][j] << ' ';
+        std::cout << std::endl;
+    }
+}
 
 const glm::mat4 &Camera::get_perspective_matrix() const
 {

@@ -18,7 +18,13 @@ public:
         RIGHT    = 0x8
     };
 
-    ActorController(float movement_speed, float rotation_speed);
+    ActorController
+    (
+        float movement_speed, 
+        float rotation_speed,
+        const glm::vec3 &position,
+        const glm::vec3 &rotation
+    );
 
     float get_movement_speed() const;
     float get_rotation_speed() const;
@@ -28,7 +34,6 @@ public:
 
     Movement get_movement() const;
     void set_movement(Movement);
-    glm::vec3 get_movement_direction() const;
 
     void rotate(float pitch, float yaw);
 
@@ -39,7 +44,8 @@ public:
 
 private:
     std::shared_ptr<Actor> controlled_actor;
-    glm::vec3 movement_direction;
+    glm::vec3 position;
+    glm::vec3 rotation;
 
     float movement_speed;
     float rotation_speed;
