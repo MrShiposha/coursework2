@@ -75,6 +75,7 @@ public:
     void setup_scene_descriptors();
     void setup_materials_descriptors();
     void setup_particle_texture_descriptors();
+    void setup_particle_texture_sampler();
 
     void setup_static_mesh_buffer();
     void setup_particle_buffer();

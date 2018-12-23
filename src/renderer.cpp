@@ -611,6 +611,7 @@ void Renderer::prepare(SceneGraph &scenegraph)
         setup_static_mesh_buffer();
 
         setup_particle_texture_descriptors();
+        setup_particle_texture_sampler();
         setup_particle_buffer();
     }
 
@@ -1054,9 +1055,6 @@ void Renderer::fill_command_buffers()
 
         // Draw flames
         /////////////////////
-        vkCmdBindPipeline(draw_command_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.flame);
-
-
         if(particle_buffer->size != 0)
         {
             VkDeviceSize offsets[1] = { 0 };
@@ -1072,7 +1070,7 @@ void Renderer::fill_command_buffers()
                 descriptor_sets[1] = flame->get_texture_descriptor_set();
 
                 uint32_t dynamic_offset = static_cast<uint32_t>(model_matrix_index) * static_cast<uint32_t>(dynamic_uniform_alignment);
-
+                vkCmdBindPipeline(draw_command_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.flame);
                 vkCmdBindDescriptorSets(draw_command_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layouts.default_layout, 0, static_cast<uint32_t>(descriptor_sets.size()), descriptor_sets.data(), 1, &dynamic_offset);
                 vkCmdDraw(draw_command_buffers[i], flame->get_particles().size(), 1, first_vertex, 0);
 
@@ -1229,6 +1227,46 @@ void Renderer::setup_particle_texture_descriptors()
             };
 
             vkUpdateDescriptorSets(*device, static_cast<uint32_t>(write_descriptors.size()), write_descriptors.data(), 0, nullptr);
+        }
+    }
+}
+
+void Renderer::setup_particle_texture_sampler()
+{
+    VkSamplerCreateInfo sampler_create_info = {};
+    sampler_create_info.sType         = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    sampler_create_info.maxAnisotropy = 1.f;
+    sampler_create_info.magFilter     = VK_FILTER_LINEAR;
+    sampler_create_info.minFilter     = VK_FILTER_LINEAR;
+    sampler_create_info.mipmapMode    = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+
+    // Different address mode
+    sampler_create_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    sampler_create_info.addressModeV = sampler_create_info.addressModeU;
+    sampler_create_info.addressModeW = sampler_create_info.addressModeU;
+    sampler_create_info.mipLodBias   = 0.0f;
+    sampler_create_info.compareOp    = VK_COMPARE_OP_NEVER;
+    sampler_create_info.minLod       = 0.0f;
+    
+    // Enable anisotropic filtering
+    sampler_create_info.maxAnisotropy = 8.0f;
+    sampler_create_info.anisotropyEnable = VK_TRUE;
+    
+    // Use a different border color (than the normal texture loader) for additive blending
+    sampler_create_info.borderColor = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
+
+    for(auto &&actor : actors_container.get_actors())
+    {
+        if(auto flame = std::dynamic_pointer_cast<Flame>(actor))
+        {
+            // Particle textures have the same number of mip maps
+            sampler_create_info.maxLod = float(flame->get_texture()->mip_levels);
+
+            vk_assert
+            (
+                vkCreateSampler(*device, &sampler_create_info, nullptr, &flame->get_texture()->sampler),
+                "Can't create sampler for particle textures"
+            );
         }
     }
 }
