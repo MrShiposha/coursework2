@@ -57,7 +57,7 @@ void setup_scene(Renderer &renderer, SceneGraph &scene)
 {
     auto mesh = StaticMesh::load_from_file
     (
-        "tree", 
+        "poleno", 
         "resources/obj/poleno/poleno.obj", 
         renderer.get_device(),
         renderer.get_command_pool(),
@@ -68,7 +68,6 @@ void setup_scene(Renderer &renderer, SceneGraph &scene)
     mesh->translate(glm::vec3(0.f, -1.f, 0.f));
 
     scene.add_node(mesh);
-
 
     auto flame_texture = Texture2D::load_from_file
     (
